@@ -19,12 +19,12 @@ func FromChan(source interface{}) Observable {
 			next, ok := val.Recv()
 			if !ok {
 				open = false
-				sub.Notify(Notification{body: nil, t: OnComplete})
+				sub.Notify(Notification{Body: nil, Type: OnComplete})
 				return
 			} else {
-				sub.Notify(Notification{body: next.Interface(), t: OnNext})
+				sub.Notify(Notification{Body: next.Interface(), Type: OnNext})
 			}
 		}
 	})
-	return wrapObservable(out)
+	return Observable{out}
 }
