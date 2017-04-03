@@ -7,9 +7,7 @@ func Create(onSub func(Subscriber)) Observable {
 
 // creates a published observable from an observable
 func published(source privObservable) privObservable {
-	s := source.privSubscribe()
-	out := &publishedObservable{source: s, targets: make(map[*simpleSubscriber]*simpleSubscriber)}
-	go out.pump()
+	out := &publishedObservable{source: source, targets: make(map[*simpleSubscriber]*simpleSubscriber)}
 	return out
 }
 
@@ -28,6 +26,7 @@ type privSubscription interface {
 	Events() <- chan Notification
 	Unsubscribe()
 	IsSubscribed() bool
+	Add(CompleteHook)
 }
 
 type Observer interface {
@@ -48,6 +47,6 @@ type Subject interface {
 	Complete()
 	Post(Notification)
 	Subscribe() Subscription
-	Lift(Operator) Observable
+	Lift(Operator) Subject
 	AsObservable() Observable
 }

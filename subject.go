@@ -6,7 +6,7 @@ type simpleSubject struct {
 }
 
 func NewPublishSubject() Subject {
-	out := new(simpleSubject)
+	var out simpleSubject
 	out.source = make(chan Notification)
 	out.obs = Create(func (subscriber Subscriber) {
 		for n := range out.source {
@@ -19,30 +19,30 @@ func NewPublishSubject() Subject {
 	return out
 }
 
-func (s *simpleSubject) Next(data interface{}) {
+func (s simpleSubject) Next(data interface{}) {
 	s.source <- Next(data)
 }
 
-func (s *simpleSubject) Error(err error) {
+func (s simpleSubject) Error(err error) {
 	s.source <- Error(err)
 }
 
-func (s *simpleSubject) Complete() {
+func (s simpleSubject) Complete() {
 	s.source <- Complete()
 }
 
-func (s *simpleSubject) Post(n Notification) {
+func (s simpleSubject) Post(n Notification) {
 	s.source <- n
 }
 
-func (s *simpleSubject) Subscribe() Subscription {
+func (s simpleSubject) Subscribe() Subscription {
 	return s.obs.Subscribe()
 }
 
-func (s *simpleSubject) AsObservable() Observable {
+func (s simpleSubject) AsObservable() Observable {
 	return s.obs
 }
 
-func (s *simpleSubject) Lift(o Operator) Observable {
-	return s.obs.Lift(o)
+func (s simpleSubject) Lift(o Operator) Subject {
+	return simpleSubject{source: s.source, obs: s.obs.Lift(o)}
 }

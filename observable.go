@@ -4,7 +4,6 @@ import (
 	"sync"
 )
 
-
 // The simple observable is simply a function which takes a subscriber and provides it with data
 type simpleObservable struct {
 	onSub *func(Subscriber)
@@ -14,8 +13,7 @@ type simpleObservable struct {
 func (obs simpleObservable) privSubscribe() privSubscription {
 	//first, create a subscriber/observer combo
 	outSub := initSimpleSubscriber()
-	go outSub.pump()
-	outSub.Notify(Start())
+	go outSub.pump(true)
 	f := *obs.onSub
 	go f(outSub)
 	return outSub
@@ -29,20 +27,16 @@ func (obs simpleObservable) Lift(op Operator) (newObs privObservable) {
 
 type simpleSubscriber struct {
 	//notifications from source are written here
-	in chan Notification
-	//then channel used to send notifications to subscribers
-	out chan Notification
+	in, out chan Notification
 	//used to write up to a parent when an unsubscription
-	unsub      chan interface{}
+	unsub, sent chan interface{}
 	hooks
-	channelMutex sync.RWMutex
 }
-
 
 func initSimpleSubscriber() (out *simpleSubscriber) {
 	out = new(simpleSubscriber)
 	out.in, out.out = make(chan Notification), make(chan Notification)
-	out.unsub = make(chan interface{})
+	out.unsub, out.sent = make(chan interface{}), make(chan interface{})
 	return
 }
 
@@ -51,51 +45,39 @@ func (sub *simpleSubscriber) Events() <-chan Notification {
 }
 
 func (sub *simpleSubscriber) Unsubscribe() {
-	sub.channelMutex.RLock()
-	defer sub.channelMutex.RUnlock()
-	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
-		return
-	}
 	sub.unsub <- nil
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
-	sub.channelMutex.RLock()
-	defer sub.channelMutex.RUnlock()
-	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
-		return
-	}
 	sub.in <- n
 }
 
-func (sub *simpleSubscriber) pump() {
-	handleComplete := func() {
-		sub.channelMutex.Lock()
-		defer sub.channelMutex.Unlock()
-		sub.callHooks()
-		close(sub.in)
-		close(sub.out)
-		close(sub.unsub)
+func (sub *simpleSubscriber) pump(start bool) {
+	if start {
+		sub.out <- Start()
 	}
-
+loop:
 	for {
 		select {
 		case i := <-sub.in:
-			select {
-				case sub.out <- i:
-					if i.Type == OnComplete {
-						handleComplete()
-						return
-					}
-				case <-sub.unsub:
-					handleComplete()
-					return
+			sub.out <- i
+			//fmt.Printf("\nposted %+v \n\t%+v\n", i, sub)
+			if i.Type == OnComplete {
+				break loop
 			}
 		case <-sub.unsub:
-			handleComplete()
-			return
+			break loop
 		}
 	}
+	sub.handleComplete()
+}
+
+func (sub *simpleSubscriber) handleComplete() {
+	close(sub.unsub)
+	close(sub.in)
+	close(sub.out)
+	close(sub.sent)
+	sub.callHooks()
 }
 
 type liftedObservable struct {
@@ -106,12 +88,12 @@ type liftedObservable struct {
 type liftedSubscriber struct {
 	source privSubscription
 	op     Operator
-	out    chan Notification
+	events chan Notification
 	hooks
 }
 
 func (lifted *liftedObservable) privSubscribe() (sub privSubscription) {
-	out := &liftedSubscriber{source: lifted.source.privSubscribe(), op: lifted.op, out: make(chan Notification)}
+	out := &liftedSubscriber{source: lifted.source.privSubscribe(), op: lifted.op, events: make(chan Notification)}
 	go out.pump()
 	sub = out
 	return
@@ -128,8 +110,8 @@ func (sub *liftedSubscriber) pump() {
 	}
 }
 
-func (sub *liftedSubscriber) Events() <- chan Notification {
-	return sub.out
+func (sub *liftedSubscriber) Events() <-chan Notification {
+	return sub.events
 }
 
 func (sub *liftedSubscriber) Unsubscribe() {
@@ -137,67 +119,71 @@ func (sub *liftedSubscriber) Unsubscribe() {
 }
 
 func (sub *liftedSubscriber) Notify(not Notification) {
-	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
-		return
-	}
-	isComplete := not.Type == OnComplete
-	if isComplete {
+	sub.events <- not
+	if not.Type == OnComplete {
+		close(sub.events)
 		sub.callHooks()
-	}
-	sub.out <- not
-	if isComplete {
-		close(sub.out)
 	}
 }
 
 type publishedObservable struct {
-	source      privSubscription
+	source      privObservable
+	sub         privSubscription
 	targetMutex sync.RWMutex
 	targets     map[*simpleSubscriber]*simpleSubscriber
 }
 
-func (sub *publishedObservable) privSubscribe() privSubscription {
+func (obs *publishedObservable) privSubscribe() privSubscription {
+	obs.targetMutex.Lock()
+
+	if obs.sub == nil {
+		obs.sub = obs.source.privSubscribe()
+		go obs.pump()
+	}
+
 	newTarget := initSimpleSubscriber()
-	sub.targetMutex.Lock()
-	defer sub.targetMutex.Unlock()
-	sub.targets[newTarget] = newTarget
-	newTarget.Add(sub.removeTarget(newTarget))
-	go newTarget.pump()
+	obs.targets[newTarget] = newTarget
+	go newTarget.pump(false)
+	newTarget.Notify(Start())
+	obs.targetMutex.Unlock()
+	newTarget.Add(obs.removeTarget(newTarget))
 	return newTarget
 }
 
-func (sub *publishedObservable) Lift(op Operator) privObservable {
-	return &liftedObservable{source: sub, op: op}
+func (obs *publishedObservable) Lift(op Operator) privObservable {
+	return &liftedObservable{source: obs, op: op}
 }
 
-func (sub *publishedObservable) pump() {
-	for e := range sub.source.Events() {
-		sub.pumpNotification(e)
+func (obs *publishedObservable) pump() {
+	for e := range obs.sub.Events() {
+		if e.Type != OnNext && e.Type != OnError {
+			continue
+		}
+		obs.targetMutex.RLock()
+		for target := range obs.targets {
+			target.Notify(e)
+		}
+		obs.targetMutex.RUnlock()
 	}
-}
-
-func (sub *publishedObservable) pumpNotification(e Notification) {
-	sub.targetMutex.RLock()
-	defer sub.targetMutex.RUnlock()
-
-	for target := range sub.targets {
-		target.Notify(e)
+	obs.targetMutex.RLock()
+	for target := range obs.targets {
+		target.Notify(Complete())
 	}
+	obs.targetMutex.RUnlock()
 }
 
-func (sub *publishedObservable) removeTarget(target *simpleSubscriber) func() {
+func (obs *publishedObservable) removeTarget(target *simpleSubscriber) func() {
 	return func() {
-		sub.targetMutex.Lock()
-		defer sub.targetMutex.Unlock()
-
-		delete(sub.targets, target)
+		obs.targetMutex.Lock()
+		defer obs.targetMutex.Unlock()
+		delete(obs.targets, target)
 	}
 }
 
 //hooks util
 type hooks struct {
-	slice []CompleteHook
-	m sync.Mutex
+	slice    []CompleteHook
+	m        sync.Mutex
 	finished bool
 }
 
