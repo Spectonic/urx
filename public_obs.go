@@ -1,11 +1,12 @@
 package urx
 
-import "sync"
+import (
+	"sync"
+)
 
 type Observable struct {
-	privObservable
+	privObservable privObservable
 }
-
 
 type Subscription interface {
 	Events() <- chan Notification
@@ -20,22 +21,26 @@ func (o Observable) Publish() Observable {
 	return Observable{published(o.privObservable)}
 }
 
+func (o Observable) Lift(operator Operator) Observable {
+	return Observable{o.privObservable.Lift(operator)}
+}
+
 func (o Observable) Map(m func (interface{}) interface{}) Observable {
-	return Observable{o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
+	return o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
 		if n.Type == OnNext {
 			n.Body = m(n.Body)
 		}
 		sub.Notify(n)
-	}))}
+	}))
 }
 
 func (o Observable) Filter(f func(interface{}) bool) Observable {
-	return Observable{o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
+	return o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
 		if n.Type == OnNext && !f(n.Body) {
 			return
 		}
 		sub.Notify(n)
-	}))}
+	}))
 }
 
 func (o Observable) Buffered(buffer int) Observable {
@@ -51,7 +56,6 @@ func (o Observable) Buffered(buffer int) Observable {
 		for msg := range c {
 			msg.to.Notify(msg.body)
 		}
-		close(c)
 	}
 
 	start := func() {
@@ -59,23 +63,23 @@ func (o Observable) Buffered(buffer int) Observable {
 		go pump()
 	}
 
-	return Observable{o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
+	return o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
 		if n.Type == OnStart {
 			l.Lock()
-			defer l.Unlock()
+			l.Unlock()
 			start()
+		} else {
+			l.RLock()
+			defer l.RUnlock()
 		}
-		if n.Type != OnNext {
-			sub.Notify(n)
-			return
-		}
-		l.RLock()
-		defer l.RUnlock()
 		c <- buffered{sub, n}
-	}))}
+		if n.Type == OnComplete {
+			close(c)
+		}
+	}))
 }
 
 func (o Observable) Subscribe() Subscription {
-	return wrappedSubscription{o.privSubscribe()}
+	return wrappedSubscription{o.privObservable.privSubscribe()}
 }
 

@@ -9,16 +9,12 @@ func FromChan(source interface{}) Observable {
 	}
 
 	out := simpleObservable(func(sub Subscriber) {
-		open := true
-		sub.Add(func() {
-			if open {
-				val.Close()
-			}
-		})
 		for {
 			next, ok := val.Recv()
+			if !sub.IsSubscribed() {
+				return
+			}
 			if !ok {
-				open = false
 				sub.Notify(Notification{Body: nil, Type: OnComplete})
 				return
 			} else {

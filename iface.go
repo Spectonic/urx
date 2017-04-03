@@ -43,6 +43,7 @@ type Subject interface {
 
 type Subscriber interface {
 	Observer
+	IsSubscribed() bool
 	Add(CompleteHook)
 }
 

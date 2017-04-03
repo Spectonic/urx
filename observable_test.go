@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 	"sync"
+	"fmt"
 )
 
 func TestObservableBasic(t *testing.T) {
 	obs := Create(func(sub Subscriber) {
 		for i := int(0); i < 5; i++ {
-			<-time.After(time.Second)
+			<-time.After(time.Millisecond * 500)
 			sub.Notify(Next(i))
 		}
 		sub.Notify(Complete())
@@ -32,11 +33,11 @@ func createChanObs(to int, rate time.Duration) Observable {
 }
 
 func TestObservableFromChan(t *testing.T) {
-	verifyObs(t, createChanObs(5, time.Second))
+	verifyObs(t, createChanObs(5, time.Millisecond * 500))
 }
 
 func TestObservablePublish(t *testing.T) {
-	o := createChanObs(5, time.Second).Publish()
+	o := createChanObs(5, time.Millisecond * 500).Publish()
 	var wg sync.WaitGroup
 	verify := func() {
 		defer wg.Done()
@@ -52,7 +53,7 @@ func TestObservablePublish(t *testing.T) {
 }
 
 func TestUnsubscribe(t *testing.T) {
-	obs := createChanObs(5, time.Second).Publish()
+	obs := createChanObs(5, time.Millisecond * 500).Publish()
 	root := func() {
 		sub := obs.Subscribe()
 		for i := 0; i < 2; i++ {
@@ -77,14 +78,7 @@ func TestUnsubscribe(t *testing.T) {
 	go other()
 	root()
 	wg.Wait()
-	t.Log("succeeded")
-}
-
-func BenchmarkObservableSimple(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		sub := createChanObs(5, time.Millisecond * 5).Subscribe()
-		for range sub.Events() {}
-	}
+	fmt.Println("succeeded")
 }
 
 func verifyObs(t *testing.T, obs Observable) int {
@@ -96,9 +90,32 @@ func verifyObs(t *testing.T, obs Observable) int {
 			t.Errorf("expecting %d but got %d", i, val)
 			panic("invalid data through pipeline")
 		}
-		t.Logf("got %d at %s", val, time.Now().Format("15:04:05 MST"))
+		fmt.Printf("got %d at %s\n", val, time.Now().Format("15:04:05 MST"))
 		i++
 	}
-	t.Log("got all values, stream closed")
+	fmt.Println("got all values, stream closed")
 	return i
+}
+
+func BenchmarkObservableChannel(b *testing.B) {
+	sub := createChanObs(100000, time.Millisecond).Subscribe()
+	for i := 0; i < b.N; i++ {
+		<-sub.Events()
+	}
+	sub.Unsubscribe()
+}
+
+func BenchmarkObservableSimple(b *testing.B) {
+	o := Create(func(sub Subscriber) {
+		for i := 0; i < 10000; i++ {
+			<-time.After(time.Millisecond)
+			sub.Notify(Next(i))
+		}
+		sub.Notify(Complete())
+	})
+	s := o.Subscribe()
+	for i := 0; i < b.N; i++ {
+		<-s.Events()
+	}
+	s.Unsubscribe()
 }

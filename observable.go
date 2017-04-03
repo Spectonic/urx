@@ -1,6 +1,8 @@
 package urx
 
-import "sync"
+import (
+	"sync"
+)
 
 
 // The simple observable is simply a function which takes a subscriber and provides it with data
@@ -88,7 +90,7 @@ type liftedSubscriber struct {
 }
 
 func (lifted *liftedObservable) privSubscribe() (sub privSubscription) {
-	out := &liftedSubscriber{source: lifted.source.privSubscribe(), op: lifted.op}
+	out := &liftedSubscriber{source: lifted.source.privSubscribe(), op: lifted.op, out: make(chan Notification)}
 	go out.pump()
 	sub = out
 	return
@@ -114,10 +116,14 @@ func (sub *liftedSubscriber) Unsubscribe() {
 }
 
 func (sub *liftedSubscriber) Notify(not Notification) {
-	if not.Type == OnComplete {
+	isComplete := not.Type == OnComplete
+	if isComplete {
 		sub.callHooks()
 	}
 	sub.out <- not
+	if isComplete {
+		close(sub.out)
+	}
 }
 
 type publishedObservable struct {
