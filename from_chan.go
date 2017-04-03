@@ -8,7 +8,7 @@ func FromChan(source interface{}) Observable {
 		panic("a channel was not passed to urx.FromChan")
 	}
 
-	out := simpleObservable(func(sub Subscriber) {
+	sub := func(sub Subscriber) {
 		for {
 			next, ok := val.Recv()
 			if !sub.IsSubscribed() {
@@ -21,6 +21,8 @@ func FromChan(source interface{}) Observable {
 				sub.Notify(Notification{Body: next.Interface(), Type: OnNext})
 			}
 		}
-	})
+	}
+
+	out := simpleObservable{&sub}
 	return Observable{out}
 }

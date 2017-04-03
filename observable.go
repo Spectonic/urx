@@ -6,7 +6,9 @@ import (
 
 
 // The simple observable is simply a function which takes a subscriber and provides it with data
-type simpleObservable func(Subscriber)
+type simpleObservable struct {
+	onSub *func(Subscriber)
+}
 
 // this creates a subscription (by calling the simpleObservable function immediately)
 func (obs simpleObservable) privSubscribe() privSubscription {
@@ -14,7 +16,8 @@ func (obs simpleObservable) privSubscribe() privSubscription {
 	outSub := initSimpleSubscriber()
 	go outSub.pump()
 	outSub.Notify(Start())
-	go obs(outSub)
+	f := *obs.onSub
+	go f(outSub)
 	return outSub
 }
 

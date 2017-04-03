@@ -2,7 +2,7 @@ package urx
 
 // creates an observable from a function
 func Create(onSub func(Subscriber)) Observable {
-	return Observable{simpleObservable(onSub)}
+	return Observable{simpleObservable{&onSub}}
 }
 
 // creates a published observable from an observable
