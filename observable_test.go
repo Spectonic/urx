@@ -89,8 +89,8 @@ func TestError(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		val := subj.Subscribe().Values()
-		<-wait
 		count := 0
+		<-wait
 		for range val {
 			count++
 		}

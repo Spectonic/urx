@@ -13,6 +13,7 @@ type simpleObservable struct {
 func (obs simpleObservable) privSubscribe() privSubscription {
 	//first, create a subscriber/observer combo
 	outSub := initSimpleSubscriber()
+	outSub.mangleError = true
 	go outSub.pump(true)
 	f := *obs.onSub
 	go f(outSub)
@@ -31,7 +32,8 @@ type simpleSubscriber struct {
 	//used to write up to a parent when an unsubscription
 	unsub, sent chan interface{}
 	hooks
-	lock sync.Mutex
+	lock sync.RWMutex
+	mangleError bool
 }
 
 func initSimpleSubscriber() (out *simpleSubscriber) {
@@ -53,9 +55,15 @@ func (sub *simpleSubscriber) Unsubscribe() {
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
-	sub.lock.Lock()
-	defer sub.lock.Unlock()
+	sub.lock.RLock()
+	defer sub.lock.RUnlock()
+	if !sub.IsSubscribed() {
+		return
+	}
 	sub.in <- n
+	if n.Type == OnError && sub.mangleError {
+		sub.in <- Complete()
+	}
 }
 
 func (sub *simpleSubscriber) pump(start bool) {
@@ -72,10 +80,6 @@ loop:
 				break
 			}
 			if i.Type == OnComplete {
-				break loop
-			}
-			if i.Type == OnError {
-				sub.out <- Complete()
 				break loop
 			}
 		case <-sub.unsub:

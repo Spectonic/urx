@@ -11,7 +11,7 @@ func NewPublishSubject() Subject {
 	out.obs = Create(func (subscriber Subscriber) {
 		for n := range out.source {
 			subscriber.Notify(n)
-			if n.Type == OnComplete {
+			if n.Type == OnComplete || n.Type == OnError {
 				close(out.source)
 			}
 		}
