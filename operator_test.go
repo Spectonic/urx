@@ -17,9 +17,7 @@ func TestFilter(t *testing.T) {
 			t.Errorf("got %d", i.(int))
 			panic("the filter was ignored")
 		}
-		fmt.Printf("we got %d\n", i.(int))
 	}
-	fmt.Println("filter worked perfectly!")
 }
 
 func TestMap(t *testing.T) {
@@ -32,9 +30,7 @@ func TestMap(t *testing.T) {
 			t.Errorf("got %d", val)
 			panic("the map failed")
 		}
-		fmt.Printf("we got %d\n", val)
 	}
-	fmt.Println("map worked perfectly")
 }
 
 //little helper thing
@@ -53,7 +49,6 @@ func TestBuffer(t *testing.T) {
 	in := 0
 	sub := createChanObs(7, time.Second).Lift(FunctionOperator(func(s Subscriber, n Notification) {
 		if n.Type == OnNext {
-			fmt.Printf("notification %s came in at %s\n", n.Body, time.Now().Format("15:04:05 MST"))
 			in++
 			if in == 5 {
 				activate()
@@ -63,11 +58,7 @@ func TestBuffer(t *testing.T) {
 	})).Buffered(3).Subscribe()
 
 	<-await.Subscribe().Complete()
-	for i := range sub.Values() {
-		val := i.(int)
-		fmt.Printf("got %d in main loop at %s\n", val, time.Now().Format("15:04:05 MST"))
-	}
-	fmt.Println("finished, got all values")
+	for range sub.Values() {}
 }
 
 func TestMultipleOperators(t *testing.T) {
@@ -86,9 +77,7 @@ func TestMultipleOperators(t *testing.T) {
 				t.Errorf("invalid value supplied %d", val)
 				panic(fmt.Sprintf("operators failed: %d", val))
 			}
-			fmt.Printf("we got %d\n", val)
 		}
-		fmt.Println("one subscriber finished!")
 	}
 
 	for i := 0; i < 10; i++ {
@@ -96,5 +85,4 @@ func TestMultipleOperators(t *testing.T) {
 		go validate()
 	}
 	wg.Wait()
-	fmt.Println("all subscribers finished!")
 }

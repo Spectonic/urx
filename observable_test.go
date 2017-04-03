@@ -78,7 +78,6 @@ func TestUnsubscribe(t *testing.T) {
 	go other()
 	root()
 	wg.Wait()
-	fmt.Println("succeeded")
 }
 
 func TestError(t *testing.T) {
@@ -113,10 +112,8 @@ func verifyObs(t *testing.T, obs Observable) int {
 			t.Errorf("expecting %d but got %d", i, val)
 			panic("invalid data through pipeline")
 		}
-		fmt.Printf("got %d at %s\n", val, time.Now().Format("15:04:05 MST"))
 		i++
 	}
-	fmt.Println("got all values, stream closed")
 	return i
 }
 

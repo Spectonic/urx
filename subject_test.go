@@ -32,7 +32,6 @@ func TestSubject(t *testing.T) {
 		waiting = append(waiting, obs)
 	}
 	<-Merge(waiting...).Subscribe().Complete()
-	fmt.Printf("firing\n")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

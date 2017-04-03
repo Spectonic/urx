@@ -3,7 +3,6 @@ package urx
 import (
 	"testing"
 	"time"
-	"fmt"
 )
 
 func TestMerge(t *testing.T) {
@@ -13,7 +12,5 @@ func TestMerge(t *testing.T) {
 
 	two := createChanObs(20, time.Millisecond * 500)
 
-	for i := range Merge(one, two).Subscribe().Events() {
-		fmt.Printf("got %d\n", i)
-	}
+	for range Merge(one, two).Subscribe().Events() {}
 }
