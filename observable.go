@@ -31,6 +31,7 @@ type simpleSubscriber struct {
 	//used to write up to a parent when an unsubscription
 	unsub, sent chan interface{}
 	hooks
+	lock sync.Mutex
 }
 
 func initSimpleSubscriber() (out *simpleSubscriber) {
@@ -45,10 +46,15 @@ func (sub *simpleSubscriber) Events() <-chan Notification {
 }
 
 func (sub *simpleSubscriber) Unsubscribe() {
+	if !sub.IsSubscribed() {
+		return
+	}
 	sub.unsub <- nil
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
+	sub.lock.Lock()
+	defer sub.lock.Unlock()
 	sub.in <- n
 }
 
@@ -60,9 +66,16 @@ loop:
 	for {
 		select {
 		case i := <-sub.in:
-			sub.out <- i
-			//fmt.Printf("\nposted %+v \n\t%+v\n", i, sub)
+			select {
+				case sub.out <- i:
+				case <-sub.unsub:
+				break
+			}
 			if i.Type == OnComplete {
+				break loop
+			}
+			if i.Type == OnError {
+				sub.out <- Complete()
 				break loop
 			}
 		case <-sub.unsub:
@@ -73,6 +86,8 @@ loop:
 }
 
 func (sub *simpleSubscriber) handleComplete() {
+	sub.lock.Lock()
+	defer sub.lock.Unlock()
 	close(sub.unsub)
 	close(sub.in)
 	close(sub.out)

@@ -81,6 +81,29 @@ func TestUnsubscribe(t *testing.T) {
 	fmt.Println("succeeded")
 }
 
+func TestError(t *testing.T) {
+	subj := NewPublishSubject()
+	wait := make(chan interface{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		val := subj.Subscribe().Values()
+		<-wait
+		count := 0
+		for range val {
+			count++
+		}
+		if count != 1 {
+			panic("error did not stop the stream")
+		}
+	}()
+	wait <- nil
+	subj.Next(nil)
+	subj.Error(fmt.Errorf("test"))
+	wg.Wait()
+}
+
 func verifyObs(t *testing.T, obs Observable) int {
 	subscription := obs.Subscribe()
 	i := 0
@@ -98,7 +121,7 @@ func verifyObs(t *testing.T, obs Observable) int {
 }
 
 func BenchmarkObservableChannel(b *testing.B) {
-	sub := createChanObs(100000, time.Duration(0)).Subscribe()
+	sub := createChanObs(1000000, time.Duration(0)).Subscribe()
 	for i := 0; i < b.N; i++ {
 		<-sub.Events()
 	}
@@ -107,7 +130,7 @@ func BenchmarkObservableChannel(b *testing.B) {
 
 func BenchmarkObservableSimple(b *testing.B) {
 	o := Create(func(sub Subscriber) {
-		for i := 0; i < 10000; i++ {
+		for i := 0; i < 1000000; i++ {
 			if !sub.IsSubscribed() {
 				return
 			}

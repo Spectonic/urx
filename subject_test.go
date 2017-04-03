@@ -13,7 +13,7 @@ func TestSubject(t *testing.T) {
 	var wg sync.WaitGroup
 
 	var waiting []Observable
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 150; i++ {
 		obs, trigger := Impulse()
 		wg.Add(1)
 		go func() {
@@ -22,11 +22,8 @@ func TestSubject(t *testing.T) {
 			sub := subj.Subscribe()
 			c := sub.Values()
 			trigger()
-			fmt.Printf("ready\n")
 			for n := range c {
 				x = n.(int)
-				fmt.Printf("got %d via %p\n", x, c)
-				<-time.After(time.Second)
 			}
 			if x != numsSent - 1 {
 				panic(fmt.Sprintf("failed to get %d more items via %p", numsSent - x - 1, c))
