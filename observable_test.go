@@ -10,7 +10,7 @@ import (
 func TestObservableBasic(t *testing.T) {
 	obs := Create(func(sub Subscriber) {
 		for i := int(0); i < 5; i++ {
-			<-time.After(time.Millisecond * 500)
+			<-time.After(time.Millisecond * 25)
 			sub.Notify(Next(i))
 		}
 		sub.Notify(Complete())
@@ -33,11 +33,11 @@ func createChanObs(to int, rate time.Duration) Observable {
 }
 
 func TestObservableFromChan(t *testing.T) {
-	verifyObs(t, createChanObs(5, time.Millisecond * 500))
+	verifyObs(t, createChanObs(5, time.Millisecond * 25))
 }
 
 func TestObservablePublish(t *testing.T) {
-	o := createChanObs(5, time.Millisecond * 500).Publish()
+	o := createChanObs(5, time.Millisecond * 25).Publish()
 	var wg sync.WaitGroup
 	verify := func() {
 		defer wg.Done()
@@ -53,7 +53,7 @@ func TestObservablePublish(t *testing.T) {
 }
 
 func TestUnsubscribe(t *testing.T) {
-	obs := createChanObs(5, time.Millisecond * 500).Publish()
+	obs := createChanObs(5, time.Millisecond * 25).Publish()
 	root := func() {
 		sub := obs.Subscribe()
 		for i := 0; i < 2; i++ {

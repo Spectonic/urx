@@ -8,7 +8,7 @@ import (
 )
 
 func TestFilter(t *testing.T) {
-	sub := createChanObs(10, time.Millisecond * 500).Filter(func (in interface{}) bool {
+	sub := createChanObs(10, time.Millisecond * 25).Filter(func (in interface{}) bool {
 		return in.(int) % 2 == 0
 	}).Subscribe()
 
@@ -21,7 +21,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	sub := createChanObs(10, time.Millisecond * 500).Map(func (in interface{}) interface{} {
+	sub := createChanObs(10, time.Millisecond * 25).Map(func (in interface{}) interface{} {
 		return in.(int) * 2 + 20
 	}).Subscribe()
 	for i := range sub.Values() {
@@ -47,7 +47,7 @@ func Impulse() (o Observable, f func()) {
 func TestBuffer(t *testing.T) {
 	await, activate := Impulse()
 	in := 0
-	sub := createChanObs(7, time.Second).Lift(FunctionOperator(func(s Subscriber, n Notification) {
+	sub := createChanObs(7, time.Millisecond * 25).Lift(FunctionOperator(func(s Subscriber, n Notification) {
 		if n.Type == OnNext {
 			in++
 			if in == 5 {
@@ -62,7 +62,7 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestMultipleOperators(t *testing.T) {
-	obs := createChanObs(20, time.Millisecond * 50).Map(func (in interface{}) interface{} {
+	obs := createChanObs(20, time.Millisecond * 25).Map(func (in interface{}) interface{} {
 		return (in.(int) * 10) + 12
 	}).Filter(func (in interface{}) bool {
 		return in.(int) % 3 == 0

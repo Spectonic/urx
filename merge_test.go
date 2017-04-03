@@ -6,11 +6,11 @@ import (
 )
 
 func TestMerge(t *testing.T) {
-	one := createChanObs(10, time.Second).Map(func (in interface{}) interface{} {
+	one := createChanObs(10, time.Millisecond * 50).Map(func (in interface{}) interface{} {
 		return in.(int) * -1
 	})
 
-	two := createChanObs(20, time.Millisecond * 500)
+	two := createChanObs(20, time.Millisecond * 25)
 
 	for range Merge(one, two).Subscribe().Events() {}
 }

@@ -37,7 +37,7 @@ func TestSubject(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < numsSent; i++ {
 			subj.Next(i)
-			<-time.After(time.Millisecond * 150)
+			<-time.After(time.Millisecond * 25)
 		}
 		subj.Complete()
 	}()
