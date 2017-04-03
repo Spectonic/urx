@@ -32,6 +32,7 @@ type simpleSubscriber struct {
 	//used to write up to a parent when an unsubscription
 	unsub      chan interface{}
 	hooks
+	channelMutex sync.RWMutex
 }
 
 
@@ -47,15 +48,27 @@ func (sub *simpleSubscriber) Events() <-chan Notification {
 }
 
 func (sub *simpleSubscriber) Unsubscribe() {
+	sub.channelMutex.RLock()
+	defer sub.channelMutex.RUnlock()
+	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
+		return
+	}
 	sub.unsub <- nil
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
+	sub.channelMutex.RLock()
+	defer sub.channelMutex.RUnlock()
+	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
+		return
+	}
 	sub.in <- n
 }
 
 func (sub *simpleSubscriber) pump() {
 	handleComplete := func() {
+		sub.channelMutex.Lock()
+		defer sub.channelMutex.Unlock()
 		sub.callHooks()
 		close(sub.in)
 		close(sub.out)
@@ -65,10 +78,15 @@ func (sub *simpleSubscriber) pump() {
 	for {
 		select {
 		case i := <-sub.in:
-			sub.out <- i
-			if i.Type == OnComplete {
-				handleComplete()
-				return
+			select {
+				case sub.out <- i:
+					if i.Type == OnComplete {
+						handleComplete()
+						return
+					}
+				case <-sub.unsub:
+					handleComplete()
+					return
 			}
 		case <-sub.unsub:
 			handleComplete()
@@ -116,6 +134,9 @@ func (sub *liftedSubscriber) Unsubscribe() {
 }
 
 func (sub *liftedSubscriber) Notify(not Notification) {
+	if !sub.IsSubscribed() { //note - this might not be the appropriate behavior for this sort of thing
+		return
+	}
 	isComplete := not.Type == OnComplete
 	if isComplete {
 		sub.callHooks()
