@@ -5,7 +5,6 @@ func Create(onSub func(Subscriber)) Observable {
 	return wrapObservable(simpleObservable(onSub))
 }
 
-
 // creates a published observable from an observable
 func published(source privObservable) privObservable {
 	s := source.Subscribe()
@@ -25,11 +24,11 @@ type privObservable interface {
 	Lift(Operator) privObservable
 }
 
-type privObserver interface {
+type Observer interface {
 	Notify(Notification)
 }
 
-type privSubject interface {
+type Subject interface {
 	privObservable
 	Subscriber
 	Next(interface{}) error
@@ -37,7 +36,7 @@ type privSubject interface {
 
 
 type Subscriber interface {
-	privObserver
+	Observer
 	Add(CompleteHook)
 }
 
