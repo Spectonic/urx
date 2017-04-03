@@ -34,12 +34,7 @@ type Observer interface {
 	Notify(Notification)
 }
 
-type Subject interface {
-	privObservable
-	Subscriber
-	Next(interface{}) error
-}
-
+type CompleteHook func()
 
 type Subscriber interface {
 	Observer
@@ -47,4 +42,12 @@ type Subscriber interface {
 	Add(CompleteHook)
 }
 
-type CompleteHook func()
+type Subject interface {
+	Next(interface{})
+	Error(error)
+	Complete()
+	Post(Notification)
+	Subscribe() Subscription
+	Lift(Operator) Observable
+	AsObservable() Observable
+}
