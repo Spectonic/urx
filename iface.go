@@ -25,8 +25,7 @@ type privObservable interface {
 type privSubscription interface {
 	Events() <- chan Notification
 	Unsubscribe()
-	IsSubscribed() bool
-	Add(CompleteHook)
+	RootSubscriber
 }
 
 type Observer interface {
@@ -37,8 +36,7 @@ type CompleteHook func()
 
 type Subscriber interface {
 	Observer
-	IsSubscribed() bool
-	Add(CompleteHook)
+	RootSubscriber
 }
 
 type Subject interface {
@@ -49,4 +47,9 @@ type Subject interface {
 	Subscribe() Subscription
 	Lift(Operator) Subject
 	AsObservable() Observable
+}
+
+type RootSubscriber interface {
+	IsSubscribed() bool
+	Add(CompleteHook)
 }

@@ -46,9 +46,10 @@ func TestObservablePublish(t *testing.T) {
 			t.Error("the stream closed prematurely")
 		}
 	}
-	wg.Add(2)
-	go verify()
-	go verify()
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go verify()
+	}
 	wg.Wait()
 }
 
@@ -105,14 +106,32 @@ func TestError(t *testing.T) {
 
 func verifyObs(t *testing.T, obs Observable) int {
 	subscription := obs.Subscribe()
+	hadStart, hadEnd := false, false
 	i := 0
-	for event := range subscription.Values() {
-		val := event.(int)
-		if val != i {
-			t.Errorf("expecting %d but got %d", i, val)
-			panic("invalid data through pipeline")
+	for event := range subscription.Events() {
+		switch event.Type {
+		case OnStart:
+			hadStart = true
+		case OnComplete:
+			hadEnd = true
+		case OnNext:
+			val := event.Body.(int)
+			if val != i {
+				t.Errorf("expecting %d but got %d", i, val)
+				panic("invalid data through pipeline")
+			}
+			i++
+		case OnError:
+			panic(event.Body)
+		default:
+			panic(fmt.Sprintf("INVALID NOTIFICATION TYPE: %s", event.Type))
 		}
-		i++
+	}
+	if !hadStart {
+		panic("did not get a Start()")
+	}
+	if !hadEnd {
+		panic("did not get an End()")
 	}
 	return i
 }

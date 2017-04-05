@@ -20,7 +20,7 @@ type Subscription interface {
 	Values() <- chan interface{}
 	Error() <- chan error
 	Complete() <- chan interface{}
-	IsSubscribed() bool
+	RootSubscriber
 }
 
 func (o Observable) Publish() Observable {

@@ -14,7 +14,7 @@ func (obs simpleObservable) privSubscribe() privSubscription {
 	//first, create a subscriber/observer combo
 	outSub := initSimpleSubscriber()
 	outSub.mangleError = true
-	go outSub.pump(true)
+	go outSub.Notify(Start())
 	f := *obs.onSub
 	go f(outSub)
 	return outSub
@@ -28,9 +28,8 @@ func (obs simpleObservable) Lift(op Operator) (newObs privObservable) {
 
 type simpleSubscriber struct {
 	//notifications from source are written here
-	in, out chan Notification
+	out chan Notification
 	//used to write up to a parent when an unsubscription
-	unsub, sent chan interface{}
 	hooks
 	lock sync.RWMutex
 	mangleError bool
@@ -38,8 +37,7 @@ type simpleSubscriber struct {
 
 func initSimpleSubscriber() (out *simpleSubscriber) {
 	out = new(simpleSubscriber)
-	out.in, out.out = make(chan Notification), make(chan Notification)
-	out.unsub, out.sent = make(chan interface{}), make(chan interface{})
+	out.out = make(chan Notification)
 	return
 }
 
@@ -48,54 +46,38 @@ func (sub *simpleSubscriber) Events() <-chan Notification {
 }
 
 func (sub *simpleSubscriber) Unsubscribe() {
+	sub.lock.RLock()
 	if !sub.IsSubscribed() {
 		return
 	}
-	sub.unsub <- nil
+	sub.out <- Complete()
+	sub.lock.RUnlock()
+	sub.handleComplete()
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
 	sub.lock.RLock()
-	defer sub.lock.RUnlock()
 	if !sub.IsSubscribed() {
 		return
 	}
-	sub.in <- n
+	sub.out <- n
 	if n.Type == OnError && sub.mangleError {
-		sub.in <- Complete()
+		n = Complete()
+		sub.out <- n
 	}
-}
-
-func (sub *simpleSubscriber) pump(start bool) {
-	if start {
-		sub.out <- Start()
+	sub.lock.RUnlock()
+	if n.Type == OnComplete {
+		sub.handleComplete()
 	}
-loop:
-	for {
-		select {
-		case i := <-sub.in:
-			select {
-				case sub.out <- i:
-				case <-sub.unsub:
-				break
-			}
-			if i.Type == OnComplete {
-				break loop
-			}
-		case <-sub.unsub:
-			break loop
-		}
-	}
-	sub.handleComplete()
 }
 
 func (sub *simpleSubscriber) handleComplete() {
 	sub.lock.Lock()
 	defer sub.lock.Unlock()
-	close(sub.unsub)
-	close(sub.in)
+	if !sub.IsSubscribed() {
+		return
+	}
 	close(sub.out)
-	close(sub.sent)
 	sub.callHooks()
 }
 
@@ -154,7 +136,6 @@ type publishedObservable struct {
 
 func (obs *publishedObservable) privSubscribe() privSubscription {
 	obs.targetMutex.Lock()
-
 	if obs.sub == nil {
 		obs.sub = obs.source.privSubscribe()
 		go obs.pump()
@@ -162,10 +143,9 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 
 	newTarget := initSimpleSubscriber()
 	obs.targets[newTarget] = newTarget
-	go newTarget.pump(false)
-	newTarget.Notify(Start())
+	go newTarget.Notify(Start())
 	obs.targetMutex.Unlock()
-	newTarget.Add(obs.removeTarget(newTarget))
+	newTarget.Add(obs.removeTargetHook(newTarget))
 	return newTarget
 }
 
@@ -191,10 +171,8 @@ func (obs *publishedObservable) pump() {
 	obs.targetMutex.RUnlock()
 }
 
-func (obs *publishedObservable) removeTarget(target *simpleSubscriber) func() {
+func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
 	return func() {
-		obs.targetMutex.Lock()
-		defer obs.targetMutex.Unlock()
 		delete(obs.targets, target)
 	}
 }

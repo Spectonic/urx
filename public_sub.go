@@ -55,3 +55,7 @@ func (s wrappedSubscription) Complete() <- chan interface{} {
 func (s wrappedSubscription) IsSubscribed() bool {
 	return s.source.IsSubscribed()
 }
+
+func (s wrappedSubscription) Add(hook CompleteHook) {
+	s.source.Add(hook)
+}
