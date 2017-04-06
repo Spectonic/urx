@@ -2,6 +2,7 @@ package urx
 
 import (
 	"sync"
+	"reflect"
 )
 
 // The simple observable is simply a function which takes a subscriber and provides it with data
@@ -158,17 +159,73 @@ func (obs *publishedObservable) pump() {
 		if e.Type != OnNext && e.Type != OnError {
 			continue
 		}
-		obs.targetMutex.RLock()
-		for target := range obs.targets {
-			target.Notify(e)
-		}
-		obs.targetMutex.RUnlock()
+		obs.pumpNotification(e)
 	}
+	obs.pumpNotification(Complete())
+}
+
+func (obs *publishedObservable) pumpNotification(n Notification) {
 	obs.targetMutex.RLock()
-	for target := range obs.targets {
-		target.Notify(Complete())
+	defer obs.targetMutex.RUnlock()
+
+	//this is designed this way such that we can send notifications to all listeners as they become ready
+	//first, create all the select cases
+	var selectCases []reflect.SelectCase
+	//and also a parallel collection of all the subscribers
+	var targets []*simpleSubscriber
+	//then create a reflect.Value from the notification we're sending
+	send := reflect.ValueOf(n)
+
+	//go through all the targets
+	for i := range obs.targets {
+		//and for this target
+		target := obs.targets[i]
+		//first, lock it so that we can use it
+		target.lock.RLock()
+		//add it to our targets
+		targets = append(targets, target)
+		//and add it to our select cases
+		selectCases = append(selectCases, reflect.SelectCase{
+			Chan: reflect.ValueOf(target.out),
+			Dir: reflect.SelectSend,
+			Send: send})
 	}
-	obs.targetMutex.RUnlock()
+	//now, if we need it, create a complete notification value as well
+	var completeN *reflect.Value
+	if n.Type == OnError {
+		c := reflect.ValueOf(Complete())
+		completeN = &c
+	}
+	//and then iterate through select cases until we're done
+	for len(selectCases) > 0 {
+		//start with a select
+		sent, _, _ := reflect.Select(selectCases)
+		//once one of these has sent, we get the target that got it's notification
+		target := targets[sent]
+		//and we look at the notification that was actually sent
+		sentN := selectCases[sent].Send.Interface().(Notification)
+		//now that we have no more data to grab from the slices, we can actually delete from the slices
+		selectCases = append(selectCases[:sent], selectCases[sent + 1:]...)
+		targets = append(targets[:sent], targets[sent + 1:]...)
+		//if we have an error, we should also send a complete
+		if sentN.Type == OnError {
+			//we send a complete by adding it to our current select cases
+			selectCases = append(selectCases, reflect.SelectCase{
+				Chan: reflect.ValueOf(target.out),
+				Dir: reflect.SelectSend,
+				Send: *completeN,
+			})
+			//and add the correct target as well
+			targets = append(targets, target)
+		} else { //if this send isn't an error
+			// we're done with the lock
+			target.lock.RUnlock()
+			//if it's an OnComplete, we're also ready to call our hooks and shut down
+			if sentN.Type == OnComplete {
+				target.handleComplete()
+			}
+		}
+	}
 }
 
 func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
