@@ -3,6 +3,8 @@ package urx
 import (
 	"sync"
 	"reflect"
+	"fmt"
+	"runtime/debug"
 )
 
 // The simple observable is simply a function which takes a subscriber and provides it with data
@@ -30,6 +32,7 @@ func (obs simpleObservable) Lift(op Operator) (newObs privObservable) {
 type simpleSubscriber struct {
 	//notifications from source are written here
 	out chan Notification
+	unsub chan interface{}
 	//used to write up to a parent when an unsubscription
 	hooks
 	lock sync.RWMutex
@@ -39,6 +42,7 @@ type simpleSubscriber struct {
 func initSimpleSubscriber() (out *simpleSubscriber) {
 	out = new(simpleSubscriber)
 	out.out = make(chan Notification)
+	out.unsub = make(chan interface{})
 	return
 }
 
@@ -52,8 +56,12 @@ func (sub *simpleSubscriber) Unsubscribe() {
 		return
 	}
 	select {
-		case sub.out <- Complete():
-		default:
+	case sub.unsub <- nil:
+	default:
+	}
+	select {
+	case sub.out <- Complete():
+	default:
 	}
 	sub.lock.RUnlock()
 	sub.handleComplete()
@@ -64,14 +72,29 @@ func (sub *simpleSubscriber) Notify(n Notification) {
 	if !sub.IsSubscribed() {
 		return
 	}
-	sub.out <- n
+	if !sub.rawSend(n) {
+		sub.lock.RUnlock()
+		return
+	}
 	if n.Type == OnError && sub.mangleError {
 		n = Complete()
-		sub.out <- n
+		if !sub.rawSend(n) {
+			sub.lock.RUnlock()
+			return
+		}
 	}
 	sub.lock.RUnlock()
 	if n.Type == OnComplete {
 		sub.handleComplete()
+	}
+}
+
+func (sub *simpleSubscriber) rawSend(n Notification) bool {
+	select {
+	case sub.out <- n:
+		return true
+	case <-sub.unsub:
+		return false
 	}
 }
 
@@ -82,6 +105,7 @@ func (sub *simpleSubscriber) handleComplete() {
 		return
 	}
 	close(sub.out)
+	close(sub.unsub)
 	sub.callHooks()
 }
 
@@ -162,7 +186,17 @@ func (obs *publishedObservable) pump() {
 		if e.Type != OnNext && e.Type != OnError {
 			continue
 		}
-		obs.pumpNotification(e)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("debug: %+v -> %+v\n", *obs, e)
+					debug.PrintStack()
+					panic(r)
+				}
+			}()
+			obs.pumpNotification(e)
+		}()
+
 	}
 	obs.pumpNotification(Complete())
 }
@@ -173,25 +207,33 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 
 	//this is designed this way such that we can send notifications to all listeners as they become ready
 	//first, create all the select cases
-	var selectCases []reflect.SelectCase
+	var sendCases, unsubCases []reflect.SelectCase
 	//and also a parallel collection of all the subscribers
 	var targets []*simpleSubscriber
+
+	addCase := func(target *simpleSubscriber, send reflect.Value) {
+		//add it to our targets
+		targets = append(targets, target)
+		//and add it to our select cases
+		sendCases = append(sendCases, reflect.SelectCase{
+			Chan: reflect.ValueOf(target.out),
+			Dir: reflect.SelectSend,
+			Send: send})
+		unsubCases = append(unsubCases, reflect.SelectCase{
+			Chan: reflect.ValueOf(target.unsub),
+			Dir: reflect.SelectRecv,
+		})
+	}
+
 	//then create a reflect.Value from the notification we're sending
 	send := reflect.ValueOf(n)
-
 	//go through all the targets
 	for i := range obs.targets {
 		//and for this target
 		target := obs.targets[i]
 		//first, lock it so that we can use it
 		target.lock.RLock()
-		//add it to our targets
-		targets = append(targets, target)
-		//and add it to our select cases
-		selectCases = append(selectCases, reflect.SelectCase{
-			Chan: reflect.ValueOf(target.out),
-			Dir: reflect.SelectSend,
-			Send: send})
+		addCase(target, send)
 	}
 	//now, if we need it, create a complete notification value as well
 	var completeN *reflect.Value
@@ -199,34 +241,53 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 		c := reflect.ValueOf(Complete())
 		completeN = &c
 	}
+	del := func(targetIndexes ...int) {
+		for i := range targetIndexes {
+			targetIndex := targetIndexes[i]
+			sendCases = append(sendCases[:targetIndex], sendCases[targetIndex + 1:]...)
+			unsubCases = append(unsubCases[:targetIndex], unsubCases[targetIndex + 1:]...)
+			targets = append(targets[:targetIndex], targets[targetIndex+ 1:]...)
+		}
+	}
 	//and then iterate through select cases until we're done
-	for len(selectCases) > 0 {
-		//start with a select
-		sent, _, _ := reflect.Select(selectCases)
-		//once one of these has sent, we get the target that got it's notification
-		target := targets[sent]
-		//and we look at the notification that was actually sent
-		sentN := selectCases[sent].Send.Interface().(Notification)
-		//now that we have no more data to grab from the slices, we can actually delete from the slices
-		selectCases = append(selectCases[:sent], selectCases[sent + 1:]...)
-		targets = append(targets[:sent], targets[sent + 1:]...)
-		//if we have an error, we should also send a complete
-		if sentN.Type == OnError {
-			//we send a complete by adding it to our current select cases
-			selectCases = append(selectCases, reflect.SelectCase{
-				Chan: reflect.ValueOf(target.out),
-				Dir: reflect.SelectSend,
-				Send: *completeN,
-			})
-			//and add the correct target as well
-			targets = append(targets, target)
-		} else { //if this send isn't an error
-			// we're done with the lock
-			target.lock.RUnlock()
-			//if it's an OnComplete, we're also ready to call our hooks and shut down
-			if sentN.Type == OnComplete {
-				target.handleComplete()
+	for len(sendCases) > 0 {
+		//do some cleaning
+		var toDelete []int
+		for i := range targets {
+			if !targets[i].IsSubscribed() {
+				toDelete = append(toDelete, i)
 			}
+		}
+		del(toDelete...)
+		//we have this here so that if someone unsubscribes, we hand control over to the unsubscribe method
+		var cases []reflect.SelectCase
+		//two regions of the "cases" slice
+		cases = append(cases, sendCases...)
+		cases = append(cases, unsubCases...)
+		//select on any of those things
+		sent, _, _ := reflect.Select(cases)
+		//if we are in the "sendCases" region
+		if sent < len(sendCases) {
+			target := targets[sent]
+			sentN := sendCases[sent].Send.Interface().(Notification)
+			del(sent)
+			//if we have an error, we should also send a complete
+			if sentN.Type == OnError {
+				//we send a complete by adding it to our current select cases
+				addCase(target, *completeN)
+			} else { //if this send isn't an error
+				// we're done with the lock
+				target.lock.RUnlock()
+				//if it's an OnComplete, we're also ready to call our hooks and shut down
+				if sentN.Type == OnComplete {
+					target.handleComplete()
+				}
+			}
+		} else {
+			//if someone unsubscribes, we simply RUnlock and hand control over to the Unsubscribe method
+			sent -= len(sendCases)
+			targets[sent].lock.RUnlock()
+			del(sent)
 		}
 	}
 }
