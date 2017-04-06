@@ -23,7 +23,7 @@ func createChanObs(to int, rate time.Duration) Observable {
 	inChan := make(chan int)
 	obs := FromChan(inChan)
 	go func() {
-		for i := int(0); i < to; i++ {
+		for i := int(0); to < 0 || i < to; i++ {
 			<-time.After(rate)
 			inChan <- i
 		}
@@ -137,7 +137,7 @@ func verifyObs(t *testing.T, obs Observable) int {
 }
 
 func BenchmarkObservableChannel(b *testing.B) {
-	sub := createChanObs(100000, time.Duration(0)).Subscribe()
+	sub := createChanObs(-1, time.Duration(0)).Subscribe()
 	for i := 0; i < b.N; i++ {
 		<-sub.Events()
 	}
@@ -146,17 +146,71 @@ func BenchmarkObservableChannel(b *testing.B) {
 
 func BenchmarkObservableSimple(b *testing.B) {
 	o := Create(func(sub Subscriber) {
-		for i := 0; i < 1000000; i++ {
+		for i := 0; i < b.N; i++ {
 			if !sub.IsSubscribed() {
 				return
 			}
 			sub.Notify(Next(i))
 		}
 		sub.Notify(Complete())
-	}).Publish()
+	})
 	s := o.Subscribe()
-	for i := 0; i < b.N; i++ {
-		<-s.Events()
+	for range s.Events() {}
+}
+
+func benchPubObs(goRoutineCount int, b *testing.B) {
+	ready := make(chan interface{})
+	obs := Create(func(sub Subscriber) {
+		rCount := 0
+		for rCount < goRoutineCount {
+			<-ready
+			rCount++
+		}
+
+		b.StopTimer()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			b.StartTimer()
+			sub.Notify(Next(i))
+			b.StopTimer()
+		}
+		b.StartTimer()
+		sub.Notify(Complete())
+		b.StopTimer()
+	}).Publish()
+
+	var wg sync.WaitGroup
+	wg.Add(goRoutineCount)
+	for i := 0; i < goRoutineCount; i++ {
+		go func(finish int) {
+			defer wg.Done()
+			sub := obs.Subscribe()
+			ready <- nil
+			lastI := 0
+			for i := range sub.Values() {
+				iVal := i.(int)
+				if iVal != lastI {
+					panic(fmt.Sprintf("invalid value flowing down pipe: %d", i))
+				}
+				lastI++
+			}
+		}((goRoutineCount - i) / 2)
 	}
-	s.Unsubscribe()
+	wg.Wait()
+}
+
+func BenchmarkPublishedObservable10(b *testing.B) {
+	benchPubObs(10, b)
+}
+
+func BenchmarkPublishedObservable25(b *testing.B) {
+	benchPubObs(25, b)
+}
+
+func BenchmarkPublishedObservable50(b *testing.B) {
+	benchPubObs(50, b)
+}
+
+func BenchmarkPublishedObservable125(b *testing.B) {
+	benchPubObs(125, b)
 }
