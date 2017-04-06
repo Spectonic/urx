@@ -51,7 +51,10 @@ func (sub *simpleSubscriber) Unsubscribe() {
 	if !sub.IsSubscribed() {
 		return
 	}
-	sub.out <- Complete()
+	select {
+		case sub.out <- Complete():
+		default:
+	}
 	sub.lock.RUnlock()
 	sub.handleComplete()
 }

@@ -137,7 +137,7 @@ func verifyObs(t *testing.T, obs Observable) int {
 }
 
 func BenchmarkObservableChannel(b *testing.B) {
-	sub := createChanObs(1000000, time.Duration(0)).Subscribe()
+	sub := createChanObs(100000, time.Duration(time.Millisecond)).Subscribe()
 	for i := 0; i < b.N; i++ {
 		<-sub.Events()
 	}
@@ -153,7 +153,7 @@ func BenchmarkObservableSimple(b *testing.B) {
 			sub.Notify(Next(i))
 		}
 		sub.Notify(Complete())
-	})
+	}).Publish()
 	s := o.Subscribe()
 	for i := 0; i < b.N; i++ {
 		<-s.Events()
