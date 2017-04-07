@@ -35,7 +35,8 @@ type simpleSubscriber struct {
 	lock         sync.RWMutex
 	mangleError  bool
 	unsubscribed bool
-	unsubClosed bool
+	unsubClosed  bool
+	extraLockers []sync.Locker
 }
 
 func initSimpleSubscriber() (out *simpleSubscriber) {
@@ -54,7 +55,7 @@ func (sub *simpleSubscriber) IsSubscribed() bool {
 }
 
 func (sub *simpleSubscriber) Unsubscribe() {
-	sub.lock.RLock()
+	sub.RLock()
 	if !sub.IsSubscribed() {
 		return
 	}
@@ -64,33 +65,55 @@ func (sub *simpleSubscriber) Unsubscribe() {
 	case sub.out <- Complete():
 	default:
 	}
-	sub.lock.RUnlock()
-	sub.lock.Lock()
-	defer sub.lock.Unlock()
+	sub.RUnlock()
+	sub.Lock()
 	sub.handleComplete()
+	sub.Unlock()
+}
+
+func (sub *simpleSubscriber) Lock() {
+	for i := range sub.extraLockers {
+		sub.extraLockers[i].Lock()
+	}
+	sub.lock.Lock()
+}
+
+func (sub *simpleSubscriber) Unlock() {
+	for i := range sub.extraLockers {
+		sub.extraLockers[i].Unlock()
+	}
+	sub.lock.Unlock()
+}
+
+func (sub *simpleSubscriber) RLock() {
+	sub.lock.RLock()
+}
+
+func (sub *simpleSubscriber) RUnlock() {
+	sub.lock.RUnlock()
 }
 
 func (sub *simpleSubscriber) Notify(n Notification) {
-	sub.lock.RLock()
+	sub.RLock()
 	if !sub.IsSubscribed() {
 		return
 	}
 	if !sub.rawSend(n) {
-		sub.lock.RUnlock()
+		sub.RUnlock()
 		return
 	}
 	if n.Type == OnError && sub.mangleError {
 		n = Complete()
 		if !sub.rawSend(n) {
-			sub.lock.RUnlock()
+			sub.RUnlock()
 			return
 		}
 	}
-	sub.lock.RUnlock()
+	sub.RUnlock()
 	if n.Type == OnComplete {
-		sub.lock.Lock()
+		sub.Lock()
 		sub.handleComplete()
-		sub.lock.Unlock()
+		sub.Unlock()
 	}
 }
 

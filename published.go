@@ -3,6 +3,7 @@ package urx
 import (
 	"sync"
 	"reflect"
+	"math/rand"
 )
 
 type publishedObservable struct {
@@ -20,6 +21,7 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 	}
 
 	newTarget := initSimpleSubscriber()
+	newTarget.extraLockers = append(newTarget.extraLockers, &obs.targetMutex)
 	obs.targets[newTarget] = newTarget
 	go newTarget.Notify(Start())
 	obs.targetMutex.Unlock()
@@ -48,6 +50,7 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 	sendCases, unsubCases, targets := make([]reflect.SelectCase, 0, len(obs.targets)),
 		make([]reflect.SelectCase, 0, len(obs.targets)),
 		make([]*simpleSubscriber, 0, len(obs.targets))
+	obs.targetMutex.RUnlock()
 
 	addCase := func(target *simpleSubscriber, send reflect.Value) {
 		//add it to our targets
@@ -66,10 +69,11 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 	//then create a reflect.Value from the notification we're sending
 	send := reflect.ValueOf(n)
 	//go through all the targets
+	obs.targetMutex.RLock()
 	for i := range obs.targets {
 		//and for this target
 		target := obs.targets[i]
-		target.lock.RLock()
+		target.RLock()
 		if !target.IsSubscribed() {
 			continue
 		}
@@ -77,61 +81,58 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 		addCase(target, send)
 	}
 	obs.targetMutex.RUnlock()
-	cases := make([]reflect.SelectCase, 0, len(sendCases) + len(unsubCases))
-	cases = append(cases, sendCases...)
-	cases = append(cases, unsubCases...)
 	del := func(targetIndexes ...int) {
 		for i := range targetIndexes {
 			targetIndex := targetIndexes[i]
-			cases = append(cases[:targetIndex + len(sendCases)], cases[targetIndex + len(sendCases) + 1:]...)
-			cases = append(cases[:targetIndex], cases[targetIndex + 1:]...)
 			sendCases = append(sendCases[:targetIndex], sendCases[targetIndex + 1:]...)
 			unsubCases = append(unsubCases[:targetIndex], unsubCases[targetIndex + 1:]...)
 			targets = append(targets[:targetIndex], targets[targetIndex + 1:]...)
 		}
 	}
+	cases := make([]reflect.SelectCase, 3, 3)
 	//and then iterate through select cases until we're done
 	for {
-		//do some cleaning
-		for i := 0; i < len(targets); i++ {
-			if !targets[i].IsSubscribed() {
-				del(i)
-				i--
-			}
-		}
-		if len(cases) == 0 {
+		var i int
+
+	select_target:
+		if len(targets) == 0 {
 			break
 		}
+		i = rand.Intn(len(unsubCases))
+		target := targets[i]
+		if !target.IsSubscribed() {
+			del(i)
+			goto select_target
+		}
+
+		cases[0], cases[1], cases[2] = sendCases[i], unsubCases[i], reflect.SelectCase{Dir: reflect.SelectDefault}
 		//we have this here so that if someone unsubscribes, we hand control over to the unsubscribe method
 		//select on any of those things
 		sent, _, _ := reflect.Select(cases)
 		//if we are in the "sendCases" region
-		if sent < len(sendCases) {
-			target := targets[sent]
-			sentN := sendCases[sent].Send.Interface().(Notification)
-			del(sent)
-			target.lock.RUnlock()
+		if sent == 0 {
+			sentN := cases[0].Send.Interface().(Notification)
+			del(i)
+			target.RUnlock()
 			//if we have an error, we should also send a complete
 			if sentN.Type == OnComplete { //if this send isn't an error
 				// we're done with the lock
 				//if it's an OnComplete, we're also ready to call our hooks and shut down
-				target.lock.Lock()
+				target.Lock()
 				target.handleComplete()
-				target.lock.Unlock()
+				target.Unlock()
 			}
-		} else {
+		} else if sent == 1 {
 			//if someone unsubscribes, we simply RUnlock and hand control over to the Unsubscribe method
 			sent -= len(sendCases)
-			targets[sent].lock.RUnlock()
-			del(sent)
+			targets[sent].RUnlock()
+			del(i)
 		}
 	}
 }
 
 func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
 	return func() {
-		obs.targetMutex.Lock()
-		defer obs.targetMutex.Unlock()
 		delete(obs.targets, target)
 	}
 }
