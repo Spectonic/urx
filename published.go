@@ -36,19 +36,18 @@ func (obs *publishedObservable) pump() {
 		if e.Type != OnNext && e.Type != OnError {
 			continue
 		}
-		obs.targetMutex.Lock()
 		obs.pumpNotification(e)
-		obs.targetMutex.Unlock()
 	}
 	obs.pumpNotification(Complete())
 }
 
 func (obs *publishedObservable) pumpNotification(n Notification) {
+	obs.targetMutex.RLock()
 	//this is designed this way such that we can send notifications to all listeners as they become ready
 	//first, create all the select cases
-	var sendCases, unsubCases []reflect.SelectCase
-	//and also a parallel collection of all the subscribers
-	var targets []*simpleSubscriber
+	sendCases, unsubCases, targets := make([]reflect.SelectCase, 0, len(obs.targets)),
+		make([]reflect.SelectCase, 0, len(obs.targets)),
+		make([]*simpleSubscriber, 0, len(obs.targets))
 
 	addCase := func(target *simpleSubscriber, send reflect.Value) {
 		//add it to our targets
@@ -70,9 +69,6 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 	for i := range obs.targets {
 		//and for this target
 		target := obs.targets[i]
-		//if target.unsubClosed || !target.IsSubscribed() {
-		//	continue
-		//}
 		target.lock.RLock()
 		if !target.IsSubscribed() {
 			continue
@@ -80,15 +76,10 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 		//first, lock it so that we can use it
 		addCase(target, send)
 	}
-	var cases []reflect.SelectCase
+	obs.targetMutex.RUnlock()
+	cases := make([]reflect.SelectCase, 0, len(sendCases) + len(unsubCases))
 	cases = append(cases, sendCases...)
 	cases = append(cases, unsubCases...)
-	//now, if we need it, create a complete notification value as well
-	var completeN *reflect.Value
-	if n.Type == OnError {
-		c := reflect.ValueOf(Complete())
-		completeN = &c
-	}
 	del := func(targetIndexes ...int) {
 		for i := range targetIndexes {
 			targetIndex := targetIndexes[i]
@@ -119,21 +110,14 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 			target := targets[sent]
 			sentN := sendCases[sent].Send.Interface().(Notification)
 			del(sent)
+			target.lock.RUnlock()
 			//if we have an error, we should also send a complete
-			if sentN.Type == OnError {
-				//we send a complete by adding it to our current select cases
-				addCase(target, *completeN)
-			} else { //if this send isn't an error
+			if sentN.Type == OnComplete { //if this send isn't an error
 				// we're done with the lock
-				target.lock.RUnlock()
 				//if it's an OnComplete, we're also ready to call our hooks and shut down
-				if sentN.Type == OnComplete {
-					go func() {
-						target.lock.Lock()
-						target.handleComplete()
-						target.lock.Unlock()
-					}()
-				}
+				target.lock.Lock()
+				target.handleComplete()
+				target.lock.Unlock()
 			}
 		} else {
 			//if someone unsubscribes, we simply RUnlock and hand control over to the Unsubscribe method
