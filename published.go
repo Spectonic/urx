@@ -128,9 +128,11 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 				target.lock.RUnlock()
 				//if it's an OnComplete, we're also ready to call our hooks and shut down
 				if sentN.Type == OnComplete {
-					target.lock.Lock()
-					target.handleComplete()
-					target.lock.Unlock()
+					go func() {
+						target.lock.Lock()
+						target.handleComplete()
+						target.lock.Unlock()
+					}()
 				}
 			}
 		} else {
