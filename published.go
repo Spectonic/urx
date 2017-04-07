@@ -46,16 +46,7 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 	obs.targetMutex.RLock()
 	//this is designed this way such that we can send notifications to all listeners as they become ready
 	//first, create all the select cases
-	sendCases, unsubCases, targets := make([]chan Notification, 0, len(obs.targets)),
-		make([]chan interface{}, 0, len(obs.targets)),
-		make([]*simpleSubscriber, 0, len(obs.targets))
-	addCase := func(target *simpleSubscriber) {
-		//add it to our targets
-		targets = append(targets, target)
-		//and add it to our select cases
-		sendCases = append(sendCases, target.out)
-		unsubCases = append(unsubCases, target.unsub)
-	}
+	targets := make([]*simpleSubscriber, 0, len(obs.targets))
 
 	//then create a reflect.Value from the notification we're sending
 	//go through all the targets
@@ -63,43 +54,40 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 		//and for this target
 		target := obs.targets[i]
 		target.RLock()
-		if !target.IsSubscribed() {
-			continue
-		}
-		//first, lock it so that we can use it
-		addCase(target)
-	}
-	obs.targetMutex.RUnlock()
-	del := func(targetIndexes ...int) {
-		for i := range targetIndexes {
-			targetIndex := targetIndexes[i]
-			sendCases = append(sendCases[:targetIndex], sendCases[targetIndex + 1:]...)
-			unsubCases = append(unsubCases[:targetIndex], unsubCases[targetIndex + 1:]...)
-			targets = append(targets[:targetIndex], targets[targetIndex + 1:]...)
-		}
-	}
-	//and then iterate through select cases until we're done
-	for len(targets) > 0 {
-		i := rand.Intn(len(unsubCases))
-		target := targets[i]
-		cleanup := func() {
-			del(i)
+		if target.IsSubscribed() {
+			//add it to our targets
+			targets = append(targets, target)
+		} else {
 			target.RUnlock()
 		}
+	}
+	obs.targetMutex.RUnlock()
+	//and then iterate through select cases until we're done
+	for len(targets) > 0 {
+		//get a random target
+		i := rand.Intn(len(targets))
+		target := targets[i]
+		//remove it from the targets collection
+		targets = append(targets[:i], targets[i + 1:]...)
+		//select from (send, unsub, none-ready)
+		var unsubbed bool
 		select {
-		case sendCases[i] <- n:
-			cleanup()
-			//if we have an error, we should also send a complete
-			if n.Type == OnComplete { //if this send isn't an error
-				// we're done with the lock
-				//if it's an OnComplete, we're also ready to call our hooks and shut down
-				target.Lock()
-				target.handleComplete()
-				target.Unlock()
-			}
-		case <-unsubCases[i]:
-			cleanup()
+		case target.out <- n:
+		case <-target.unsub:
+			unsubbed = true
 		default:
+			//if nothing is ready, re-prepare the target for later, and move on
+			targets = append(targets, target)
+			continue
+		}
+		//we reach here in every case except when we could not send or read unsub (default)
+		//we're done with the lock
+		target.RUnlock()
+		//if it's an OnComplete, we're ready to call our hooks and shut down
+		if n.Type == OnComplete && !unsubbed {
+			target.Lock()
+			target.handleComplete()
+			target.Unlock()
 		}
 	}
 }
