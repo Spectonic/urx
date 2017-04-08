@@ -2,7 +2,7 @@ package urx
 
 type CompositeSubscription struct {
 	closed bool
-	*hooks
+	hooks
 }
 
 func (sub *CompositeSubscription) Add(subscription Subscription) {
