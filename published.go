@@ -14,10 +14,7 @@ type publishedObservable struct {
 
 func (obs *publishedObservable) privSubscribe() privSubscription {
 	obs.targetMutex.Lock()
-	if obs.sub == nil {
-		obs.sub = obs.source.privSubscribe()
-		go obs.pump()
-	}
+	obs.initSubIfNeeded()
 
 	newTarget := initSimpleSubscriber()
 	newTarget.extraLockers = append(newTarget.extraLockers, &obs.targetMutex)
@@ -26,6 +23,13 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 	obs.targetMutex.Unlock()
 	newTarget.Add(obs.removeTargetHook(newTarget))
 	return newTarget
+}
+
+func (obs *publishedObservable) initSubIfNeeded() {
+	if obs.sub == nil {
+		obs.sub = obs.source.privSubscribe()
+		go obs.pump()
+	}
 }
 
 func (obs *publishedObservable) Lift(op Operator) privObservable {
