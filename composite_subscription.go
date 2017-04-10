@@ -1,11 +1,16 @@
 package urx
 
+type CompositeSubscriptionTarget interface {
+	IsSubscribed() bool
+	Unsubscribe()
+}
+
 type CompositeSubscription struct {
 	closed bool
 	hooks
 }
 
-func (sub *CompositeSubscription) Add(subscription Subscription) {
+func (sub *CompositeSubscription) Add(subscription CompositeSubscriptionTarget) {
 	sub.hooks.Add(func() {
 		if subscription.IsSubscribed() {
 			subscription.Unsubscribe()
