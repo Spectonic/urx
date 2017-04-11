@@ -1,6 +1,9 @@
 package urx
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type Subscription interface {
 	Events() <- chan Notification
@@ -40,7 +43,7 @@ pump_loop:
 		case OnError:
 			select {
 			case s.source <- e:
-			case s.values <- e.Body.(error):
+			case s.error <- e.Body.(error):
 			}
 		case OnComplete:
 			break pump_loop
@@ -63,23 +66,22 @@ func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
 		s.mutex.RUnlock()
 		s.mutex.Lock()
 		s.pumping = true
+		s.mutex.Unlock()
 		go func() {
 			if allEvents {
 				s.source <- Start()
 			}
 			s.pump()
-			if allEvents {
-				select {
-				case s.source <- Complete():
-				case s.complete <- nil:
-				}
+			select {
+			case s.source <- Complete():
+			case s.complete <- nil:
+			case <-time.After(time.Millisecond):
 			}
 			close(s.error)
 			close(s.values)
 			close(s.complete)
 			close(s.source)
 		}()
-		s.mutex.Unlock()
 	} else {
 		s.mutex.RUnlock()
 	}

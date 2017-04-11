@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-const count = 5
+const count = 100
 
 func TestMerge(t *testing.T) {
 	one := createChanObs(10, time.Millisecond * 50).Map(func (in interface{}) interface{} {

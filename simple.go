@@ -1,8 +1,6 @@
 package urx
 
-import (
-	"sync"
-)
+import "sync"
 
 // The simple observable is simply a function which takes a subscriber and provides it with data
 type simpleObservable struct {
@@ -95,7 +93,7 @@ func (sub *simpleSubscriber) RUnlock() {
 
 func (sub *simpleSubscriber) Notify(n Notification) {
 	sub.RLock()
-	if !sub.IsSubscribed() {
+	if sub.unsubscribed {
 		return
 	}
 	if !sub.rawSend(n) {
@@ -127,7 +125,7 @@ func (sub *simpleSubscriber) rawSend(n Notification) bool {
 }
 
 func (sub *simpleSubscriber) handleComplete() {
-	if !sub.IsSubscribed() {
+	if sub.unsubscribed {
 		return
 	}
 	sub.unsubscribed = true
