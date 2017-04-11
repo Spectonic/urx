@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 	"sync"
+	"fmt"
 )
 
-const count = 100
+const count = 2
 
 func TestMerge(t *testing.T) {
 	one := createChanObs(10, time.Millisecond * 50).Map(func (in interface{}) interface{} {
@@ -35,7 +36,8 @@ func TestMerge(t *testing.T) {
 			if i0 == i {
 				continue
 			}
-			if len(values[i0]) != len(values[i]) {
+			if len(values[i0]) != len(values[i]) || len(values[i0]) != 30 {
+				fmt.Printf("[%d] %v\n [%d] %v", len(values[i0]), values[i0], len(values[i]), values[i])
 				panic("non-equal slices")
 			}
 		}
