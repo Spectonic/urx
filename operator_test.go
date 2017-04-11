@@ -38,7 +38,6 @@ func Impulse() (o Observable, f func()) {
 	c := make(chan interface{})
 	o = FromChan(c).Publish()
 	f = func() {
-		c <- nil
 		close(c)
 	}
 	return

@@ -1,15 +1,22 @@
 package urx
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
 func Merge(obs ...Observable) Observable {
-	subscriptions := make(map[Observable]Subscription)
-	for i := range obs {
-		subscriptions[obs[i]] = obs[i].Subscribe()
-	}
 	return Create(func(subscriber Subscriber) {
+		var subMutex sync.Mutex
+		subscriptions := make(map[Observable]Subscription)
+		for i := range obs {
+			subscriptions[obs[i]] = obs[i].Subscribe()
+		}
+
 		defer subscriber.Notify(Complete())
 		subscriber.Add(func() {
+			subMutex.Lock()
+			defer subMutex.Unlock()
 			for _, sub := range subscriptions {
 				if sub.IsSubscribed() {
 					sub.Unsubscribe()
@@ -21,6 +28,7 @@ func Merge(obs ...Observable) Observable {
 			var selects []reflect.SelectCase
 			var remove []Observable
 			var selectIdx []Observable
+			subMutex.Lock()
 			for obs, sub := range subscriptions {
 				if !sub.IsSubscribed() {
 					remove = append(remove, obs)
@@ -33,6 +41,7 @@ func Merge(obs ...Observable) Observable {
 			for i := range remove {
 				delete(subscriptions, remove[i])
 			}
+			subMutex.Unlock()
 
 			from, val, ok := reflect.Select(selects)
 			if !ok {
