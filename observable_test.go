@@ -29,7 +29,7 @@ func createChanObs(to int, rate time.Duration) Observable {
 		}
 		close(inChan)
 	}()
-	return obs.Publish()
+	return obs
 }
 
 func TestObservableFromChan(t *testing.T) {

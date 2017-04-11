@@ -14,15 +14,6 @@ type Observable struct {
 	privObservable privObservable
 }
 
-type Subscription interface {
-	Events() <- chan Notification
-	Unsubscribe()
-	Values() <- chan interface{}
-	Error() <- chan error
-	Complete() <- chan interface{}
-	RootSubscriber
-}
-
 func (o Observable) Publish() Observable {
 	return Observable{published(o.privObservable)}
 }
@@ -86,6 +77,6 @@ func (o Observable) Buffered(buffer int) Observable {
 }
 
 func (o Observable) Subscribe() Subscription {
-	return wrappedSubscription{o.privObservable.privSubscribe()}
+	return wrappedSubscription{sub: o.privObservable.privSubscribe()}.init()
 }
 

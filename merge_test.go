@@ -9,11 +9,11 @@ import (
 const count = 5
 
 func TestMerge(t *testing.T) {
-	one := createChanObs(100, time.Millisecond * 50).Map(func (in interface{}) interface{} {
+	one := createChanObs(10, time.Millisecond * 50).Map(func (in interface{}) interface{} {
 		return in.(int) * -1
 	})
 
-	two := createChanObs(200, time.Millisecond * 25)
+	two := createChanObs(20, time.Millisecond * 25)
 
 	var wg sync.WaitGroup
 	values := make([][]int, count, count)

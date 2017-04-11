@@ -1,80 +1,109 @@
 package urx
 
+import "sync"
+
+type Subscription interface {
+	Events() <- chan Notification
+	Unsubscribe()
+	Values() <- chan interface{}
+	Error() <- chan error
+	Complete() <- chan interface{}
+	RootSubscriber
+}
+
 type wrappedSubscription struct {
-	source *publishedObservable
-	composite *CompositeSubscription
-	h hooks
+	sub privSubscription
+	source chan Notification
+	values, complete chan interface{}
+	error chan error
+	pumping bool
+	mutex sync.RWMutex
 }
 
-func wrapSub(sub privObservable) (out wrappedSubscription) {
-	if pubSub, ok := sub.(*publishedObservable); ok {
-		out.source = pubSub
-	} else {
-		out.source = published(sub).(*publishedObservable)
+func (s wrappedSubscription) init() *wrappedSubscription {
+	s.error = make(chan error)
+	s.values = make(chan interface{})
+	s.complete = make(chan interface{})
+	s.source = make(chan Notification)
+	return &s
+}
+
+func (s *wrappedSubscription) pump() {
+pump_loop:
+	for e := range s.sub.Events() {
+		switch e.Type {
+		case OnNext:
+			select {
+			case s.source <- e:
+			case s.values <- e.Body:
+			}
+		case OnError:
+			select {
+			case s.source <- e:
+			case s.values <- e.Body.(error):
+			}
+		case OnComplete:
+			break pump_loop
+		}
 	}
-	out.composite = new(CompositeSubscription)
-	return
 }
 
-func (s wrappedSubscription) Events() <- chan Notification {
-	return s.subNew().Events()
+func (s *wrappedSubscription) Events() <- chan Notification {
+	s.initIfNeeded(true)
+	return s.source
 }
 
-func (s wrappedSubscription) subNew() privSubscription {
-	sub := s.source.privSubscribe()
-	s.composite.Add(sub)
-	return sub
+func (s *wrappedSubscription) Unsubscribe() {
+	s.sub.Unsubscribe()
 }
 
-func (s wrappedSubscription) Unsubscribe() {
-	s.composite.Unsubscribe()
-	s.h.callHooks()
-}
-
-func (s wrappedSubscription) Values() <- chan interface{} {
-	out := make(chan interface{})
-	go func() {
-		defer close(out)
-		for e := range s.Events() {
-			if e.Type == OnNext {
-				out <- e.Body
+func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
+	s.mutex.RLock()
+	if !s.pumping {
+		s.mutex.RUnlock()
+		s.mutex.Lock()
+		s.pumping = true
+		go func() {
+			if allEvents {
+				s.source <- Start()
 			}
-		}
-	}()
-	return out
-}
-
-func (s wrappedSubscription) Error() <- chan error {
-	out := make(chan error)
-	go func() {
-		defer close(out)
-		for e := range s.Events() {
-			if e.Type == OnError {
-				out <- e.Body.(error)
-				return
+			s.pump()
+			if allEvents {
+				select {
+				case s.source <- Complete():
+				case s.complete <- nil:
+				}
 			}
-		}
-	}()
-	return out
+			close(s.error)
+			close(s.values)
+			close(s.complete)
+			close(s.source)
+		}()
+		s.mutex.Unlock()
+	} else {
+		s.mutex.RUnlock()
+	}
 }
 
-func (s wrappedSubscription) Complete() <- chan interface{} {
-	out := make(chan interface{})
-	go func() {
-		defer close(out)
-		for e := range s.Events() {
-			if e.Type == OnComplete {
-				out <- nil
-			}
-		}
-	}()
-	return out
+func (s *wrappedSubscription) Values() <- chan interface{} {
+	s.initIfNeeded(false)
+	return s.values
 }
 
-func (s wrappedSubscription) IsSubscribed() bool {
-	return s.composite.IsSubscribed() && !s.h.finished
+func (s *wrappedSubscription) Error() <- chan error {
+	s.initIfNeeded(false)
+	return s.error
 }
 
-func (s wrappedSubscription) Add(hook CompleteHook) {
-	s.h.Add(hook)
+func (s *wrappedSubscription) Complete() <- chan interface{} {
+	s.initIfNeeded(false)
+	return s.complete
+}
+
+func (s *wrappedSubscription) IsSubscribed() bool {
+	return s.sub.IsSubscribed()
+}
+
+func (s *wrappedSubscription) Add(hook CompleteHook) {
+	s.sub.Add(hook)
 }

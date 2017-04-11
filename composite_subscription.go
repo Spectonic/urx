@@ -15,7 +15,7 @@ type CompositeSubscription struct {
 
 func (sub *CompositeSubscription) Add(subscription CompositeSubscriptionTarget) {
 	sub.mutex.Lock()
-	defer sub.mutex.Lock()
+	defer sub.mutex.Unlock()
 	sub.hooks.Add(func() {
 		if subscription.IsSubscribed() {
 			subscription.Unsubscribe()
@@ -31,7 +31,7 @@ func (sub *CompositeSubscription) IsSubscribed() bool {
 
 func (sub *CompositeSubscription) Unsubscribe() {
 	sub.mutex.Lock()
-	defer sub.mutex.Lock()
+	defer sub.mutex.Unlock()
 	if sub.finished {
 		return
 	}

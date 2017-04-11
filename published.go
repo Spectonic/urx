@@ -38,8 +38,11 @@ func (obs *publishedObservable) Lift(op Operator) privObservable {
 
 func (obs *publishedObservable) pump() {
 	for e := range obs.sub.Events() {
-		if e.Type != OnNext && e.Type != OnError {
+		if e.Type == OnError || e.Type == OnStart {
 			continue
+		}
+		if e.Type == OnComplete {
+			break
 		}
 		obs.pumpNotification(e)
 	}
