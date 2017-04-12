@@ -44,7 +44,7 @@ type Subject interface {
 	Complete()
 	Post(Notification)
 	Subscribe() Subscription
-	AsObservable() PublishedObservable
+	AsObservable() Observable
 }
 
 type RootSubscriber interface {

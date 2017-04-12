@@ -43,6 +43,6 @@ func (s simpleSubject) Subscribe() Subscription {
 	return s.obs.Subscribe()
 }
 
-func (s simpleSubject) AsObservable() PublishedObservable {
+func (s simpleSubject) AsObservable() Observable {
 	return s.obs
 }
