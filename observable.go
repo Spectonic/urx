@@ -25,6 +25,7 @@ type PublishedObservable interface {
 	Observable
 	Unsubscribe()
 	IsSubscribed() bool
+	Add(CompleteHook)
 }
 
 type pObservable struct {
@@ -41,6 +42,10 @@ func (p pObservable) Unsubscribe() {
 
 func (p pObservable) Publish() PublishedObservable {
 	return p
+}
+
+func (p pObservable) Add(h CompleteHook) {
+	p.privObservable.(*publishedObservable).Add(h)
 }
 
 type bObservable struct {

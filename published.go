@@ -36,6 +36,14 @@ func (obs *publishedObservable) IsSubscribed() bool {
 	return obs.sub != nil && obs.sub.IsSubscribed()
 }
 
+func (obs *publishedObservable) Add(h CompleteHook) {
+	if obs.sub == nil {
+		panic("cannot add while not subscribed")
+	}
+
+	obs.sub.Add(h)
+}
+
 func (obs *publishedObservable) initSubIfNeeded() {
 	if obs.sub == nil {
 		obs.sub = obs.source.privSubscribe()
