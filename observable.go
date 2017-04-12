@@ -117,4 +117,3 @@ func (o bObservable) Buffered(buffer int) Observable {
 func (o bObservable) Subscribe() Subscription {
 	return wrappedSubscription{sub: o.privObservable.privSubscribe()}.init()
 }
-

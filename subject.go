@@ -2,7 +2,7 @@ package urx
 
 type simpleSubject struct {
 	source chan Notification
-	obs Observable
+	obs PublishedObservable
 }
 
 func NewPublishSubject() Subject {
@@ -43,10 +43,6 @@ func (s simpleSubject) Subscribe() Subscription {
 	return s.obs.Subscribe()
 }
 
-func (s simpleSubject) AsObservable() Observable {
+func (s simpleSubject) AsObservable() PublishedObservable {
 	return s.obs
-}
-
-func (s simpleSubject) Lift(o Operator) Subject {
-	return simpleSubject{source: s.source, obs: s.obs.Lift(o)}
 }
