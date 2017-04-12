@@ -25,6 +25,17 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 	return newTarget
 }
 
+func (obs *publishedObservable) Unsubscribe() {
+	if !obs.IsSubscribed() {
+		return
+	}
+	obs.sub.Unsubscribe()
+}
+
+func (obs *publishedObservable) IsSubscribed() bool {
+	return obs.sub != nil && obs.sub.IsSubscribed()
+}
+
 func (obs *publishedObservable) initSubIfNeeded() {
 	if obs.sub == nil {
 		obs.sub = obs.source.privSubscribe()

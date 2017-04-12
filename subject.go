@@ -16,7 +16,7 @@ func NewPublishSubject() Subject {
 			}
 		}
 	}).Publish()
-	v := out.obs.privObservable.(*publishedObservable)
+	v := out.obs.getObs().(*publishedObservable)
 	v.targetMutex.Lock()
 	defer v.targetMutex.Unlock()
 	v.initSubIfNeeded()

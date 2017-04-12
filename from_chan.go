@@ -24,5 +24,5 @@ func FromChan(source interface{}) Observable {
 	}
 
 	out := simpleObservable{&sub}
-	return Observable{out}.Publish()
+	return bObservable{out}.Publish()
 }
