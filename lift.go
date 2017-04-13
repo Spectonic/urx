@@ -20,11 +20,6 @@ func (lifted *liftedObservable) privSubscribe() (sub privSubscription) {
 	out := &liftedSubscriber{source: lifted.source.privSubscribe(), op: lifted.op, events: make(chan Notification), unsub: make(chan interface{})}
 	go out.pump()
 	sub = out
-	out.Add(func() {
-		out.source.Unsubscribe()
-		close(out.events)
-		close(out.unsub)
-	})
 	return
 }
 
@@ -44,9 +39,17 @@ func (sub *liftedSubscriber) Events() <-chan Notification {
 }
 
 func (sub *liftedSubscriber) Unsubscribe() {
+	sub.cMutex.RLock()
+	close(sub.unsub)
+	sub.cMutex.RUnlock()
 	sub.cMutex.Lock()
+	defer sub.cMutex.Unlock()
+	if !sub.source.IsSubscribed() {
+		return
+	}
+	sub.source.Unsubscribe()
+	close(sub.events)
 	sub.callHooks()
-	sub.cMutex.Unlock()
 }
 
 func (sub *liftedSubscriber) IsSubscribed() bool {
