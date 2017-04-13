@@ -8,11 +8,13 @@ type liftedObservable struct {
 }
 
 type liftedSubscriber struct {
-	source privSubscription
-	op     Operator
-	events chan Notification
-	unsub chan interface{}
-	cMutex sync.RWMutex
+	source   privSubscription
+	op       Operator
+	events   chan Notification
+	unsub    chan interface{}
+	cMutex   sync.RWMutex
+	uMutex   sync.Mutex
+	unsubbed bool
 	hooks
 }
 
@@ -40,20 +42,24 @@ func (sub *liftedSubscriber) Events() <-chan Notification {
 }
 
 func (sub *liftedSubscriber) Unsubscribe() {
-	sub.cMutex.RLock()
-	close(sub.unsub)
-	sub.cMutex.RUnlock()
-	sub.cMutex.Lock()
-	defer sub.cMutex.Unlock()
-	if !sub.source.IsSubscribed() {
+	sub.uMutex.Lock()
+	if !sub.unsubbed {
 		return
 	}
+	close(sub.unsub)
+	sub.unsubbed = true
 	sub.source.Unsubscribe()
+	sub.uMutex.Unlock()
+	sub.cMutex.Lock()
+	defer sub.cMutex.Unlock()
+	if !sub.IsSubscribed() {
+		return
+	}
 	sub.callHooks()
 }
 
 func (sub *liftedSubscriber) IsSubscribed() bool {
-	return sub.source.IsSubscribed() && !sub.finished
+	return !sub.unsubbed && sub.source.IsSubscribed() && !sub.finished
 }
 
 func (sub *liftedSubscriber) Notify(not Notification) {
