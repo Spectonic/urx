@@ -30,6 +30,7 @@ func (obs *publishedObservable) Unsubscribe() {
 		return
 	}
 	obs.sub.Unsubscribe()
+	obs.sub = nil
 }
 
 func (obs *publishedObservable) IsSubscribed() bool {
@@ -121,5 +122,8 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
 	return func() {
 		delete(obs.targets, target)
+		if len(obs.targets) == 0 {
+			obs.Unsubscribe()
+		}
 	}
 }
