@@ -29,10 +29,10 @@ func (lifted *liftedObservable) Lift(op Operator) (obs privObservable) {
 }
 
 func (sub *liftedSubscriber) pump() {
+	defer close(sub.events)
 	for ev := range sub.source.Events() {
 		sub.op.Notify(sub, ev)
 	}
-	close(sub.events)
 }
 
 func (sub *liftedSubscriber) Events() <-chan Notification {
