@@ -32,6 +32,7 @@ func (sub *liftedSubscriber) pump() {
 	for ev := range sub.source.Events() {
 		sub.op.Notify(sub, ev)
 	}
+	close(sub.events)
 }
 
 func (sub *liftedSubscriber) Events() <-chan Notification {
@@ -48,7 +49,6 @@ func (sub *liftedSubscriber) Unsubscribe() {
 		return
 	}
 	sub.source.Unsubscribe()
-	close(sub.events)
 	sub.callHooks()
 }
 
