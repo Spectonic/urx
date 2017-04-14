@@ -43,7 +43,8 @@ func (sub *liftedSubscriber) Events() <-chan Notification {
 
 func (sub *liftedSubscriber) Unsubscribe() {
 	sub.uMutex.Lock()
-	if !sub.unsubbed {
+	if sub.unsubbed {
+		sub.uMutex.Unlock()
 		return
 	}
 	close(sub.unsub)
