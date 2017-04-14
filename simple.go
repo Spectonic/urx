@@ -49,6 +49,8 @@ func (sub *simpleSubscriber) Events() <-chan Notification {
 }
 
 func (sub *simpleSubscriber) IsSubscribed() bool {
+	sub.RLock()
+	defer sub.RUnlock()
 	return !sub.unsubscribed
 }
 
