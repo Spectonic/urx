@@ -94,7 +94,11 @@ func (o bObservable) Buffered(buffer int) Observable {
 
 	pump := func() {
 		for msg := range c {
-			msg.to.Notify(msg.body)
+			if msg.to.IsSubscribed() {
+				msg.to.Notify(msg.body)
+			} else {
+				return
+			}
 		}
 	}
 

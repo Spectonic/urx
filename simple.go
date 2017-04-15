@@ -12,9 +12,11 @@ func (obs simpleObservable) privSubscribe() privSubscription {
 	//first, create a subscriber/observer combo
 	outSub := initSimpleSubscriber()
 	outSub.mangleError = true
-	go outSub.Notify(Start())
 	f := *obs.onSub
-	go f(outSub)
+	go func() {
+		outSub.Notify(Start())
+		f(outSub)
+	}()
 	return outSub
 }
 

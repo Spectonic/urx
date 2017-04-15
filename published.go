@@ -6,6 +6,7 @@ import (
 )
 
 type publishedObservable struct {
+	completed   bool
 	source      privObservable
 	sub         privSubscription
 	targetMutex sync.RWMutex
@@ -14,14 +15,22 @@ type publishedObservable struct {
 
 func (obs *publishedObservable) privSubscribe() privSubscription {
 	obs.targetMutex.Lock()
+	if obs.completed {
+		newTarget := initSimpleSubscriber()
+		go func() {
+			newTarget.Notify(Start())
+			newTarget.Notify(Complete())
+		}()
+		return newTarget
+	}
 	obs.initSubIfNeeded()
 
 	newTarget := initSimpleSubscriber()
 	newTarget.extraLockers = append(newTarget.extraLockers, &obs.targetMutex)
 	obs.targets[newTarget] = newTarget
 	go newTarget.Notify(Start())
-	obs.targetMutex.Unlock()
 	newTarget.Add(obs.removeTargetHook(newTarget))
+	obs.targetMutex.Unlock()
 	return newTarget
 }
 
@@ -30,7 +39,6 @@ func (obs *publishedObservable) Unsubscribe() {
 		return
 	}
 	obs.sub.Unsubscribe()
-	obs.sub = nil
 }
 
 func (obs *publishedObservable) IsSubscribed() bool {
@@ -58,15 +66,17 @@ func (obs *publishedObservable) Lift(op Operator) privObservable {
 
 func (obs *publishedObservable) pump() {
 	for e := range obs.sub.Events() {
-		if e.Type == OnError || e.Type == OnStart {
+		if  e.Type == OnStart {
 			continue
 		}
+		obs.pumpNotification(e)
 		if e.Type == OnComplete {
+			obs.completed = true
 			break
 		}
-		obs.pumpNotification(e)
 	}
-	obs.pumpNotification(Complete())
+	obs.sub.Unsubscribe()
+	obs.sub = nil
 }
 
 func (obs *publishedObservable) pumpNotification(n Notification) {

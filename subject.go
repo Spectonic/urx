@@ -11,28 +11,24 @@ func NewPublishSubject() Subject {
 	out.obs = Create(func (subscriber Subscriber) {
 		for n := range out.source {
 			subscriber.Notify(n)
-			if n.Type == OnComplete || n.Type == OnError {
+			if n.Type == OnComplete {
 				close(out.source)
 			}
 		}
 	}).Publish()
-	v := out.obs.getObs().(*publishedObservable)
-	v.targetMutex.Lock()
-	defer v.targetMutex.Unlock()
-	v.initSubIfNeeded()
 	return out
 }
 
 func (s simpleSubject) Next(data interface{}) {
-	s.source <- Next(data)
+	s.Post(Next(data))
 }
 
 func (s simpleSubject) Error(err error) {
-	s.source <- Error(err)
+	s.Post(Error(err))
 }
 
 func (s simpleSubject) Complete() {
-	s.source <- Complete()
+	s.Post(Complete())
 }
 
 func (s simpleSubject) Post(n Notification) {

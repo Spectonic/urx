@@ -53,9 +53,6 @@ func (sub *liftedSubscriber) Unsubscribe() {
 	sub.uMutex.Unlock()
 	sub.cMutex.Lock()
 	defer sub.cMutex.Unlock()
-	if !sub.IsSubscribed() {
-		return
-	}
 	sub.callHooks()
 }
 

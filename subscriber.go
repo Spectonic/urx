@@ -1,9 +1,6 @@
 package urx
 
-import (
-	"sync"
-	"time"
-)
+import "sync"
 
 type Subscription interface {
 	Events() <- chan Notification
@@ -24,10 +21,6 @@ type wrappedSubscription struct {
 }
 
 func (s wrappedSubscription) init() *wrappedSubscription {
-	s.error = make(chan error)
-	s.values = make(chan interface{})
-	s.complete = make(chan interface{})
-	s.source = make(chan Notification)
 	return &s
 }
 
@@ -35,15 +28,25 @@ func (s *wrappedSubscription) pump() {
 pump_loop:
 	for e := range s.sub.Events() {
 		switch e.Type {
+		case OnStart:
+			if s.source != nil {
+				select {
+				case s.source <- e:
+				}
+			}
 		case OnNext:
-			select {
-			case s.source <- e:
-			case s.values <- e.Body:
+			if s.source != nil || s.values != nil {
+				select {
+				case s.source <- e:
+				case s.values <- e.Body:
+				}
 			}
 		case OnError:
-			select {
-			case s.source <- e:
-			case s.error <- e.Body.(error):
+			if s.source != nil || s.error != nil {
+				select {
+				case s.source <- e:
+				case s.error <- e.Body.(error):
+				}
 			}
 		case OnComplete:
 			break pump_loop
@@ -52,6 +55,9 @@ pump_loop:
 }
 
 func (s *wrappedSubscription) Events() <- chan Notification {
+	if s.source == nil {
+		s.source = make(chan Notification)
+	}
 	s.initIfNeeded(true)
 	return s.source
 }
@@ -68,19 +74,25 @@ func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
 		s.pumping = true
 		s.mutex.Unlock()
 		go func() {
-			if allEvents {
-				s.source <- Start()
-			}
 			s.pump()
-			select {
-			case s.source <- Complete():
-			case s.complete <- nil:
-			case <-time.After(time.Millisecond):
+			if s.source != nil || s.complete != nil {
+				select {
+				case s.source <- Complete():
+				case s.complete <- nil:
+				}
 			}
-			close(s.error)
-			close(s.values)
-			close(s.complete)
-			close(s.source)
+			if s.error != nil {
+				close(s.error)
+			}
+			if s.values != nil {
+				close(s.values)
+			}
+			if s.complete != nil {
+				close(s.complete)
+			}
+			if s.source != nil {
+				close(s.source)
+			}
 		}()
 	} else {
 		s.mutex.RUnlock()
@@ -88,16 +100,25 @@ func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
 }
 
 func (s *wrappedSubscription) Values() <- chan interface{} {
+	if s.values == nil {
+		s.values = make(chan interface{})
+	}
 	s.initIfNeeded(false)
 	return s.values
 }
 
 func (s *wrappedSubscription) Error() <- chan error {
+	if s.error == nil {
+		s.error = make(chan error)
+	}
 	s.initIfNeeded(false)
 	return s.error
 }
 
 func (s *wrappedSubscription) Complete() <- chan interface{} {
+	if s.complete == nil {
+		s.complete = make(chan interface{})
+	}
 	s.initIfNeeded(false)
 	return s.complete
 }

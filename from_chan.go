@@ -11,9 +11,6 @@ func FromChan(source interface{}) Observable {
 	sub := func(sub Subscriber) {
 		for {
 			next, ok := val.Recv()
-			if !sub.IsSubscribed() {
-				return
-			}
 			if !ok {
 				sub.Notify(Notification{Body: nil, Type: OnComplete})
 				return
@@ -24,5 +21,5 @@ func FromChan(source interface{}) Observable {
 	}
 
 	out := simpleObservable{&sub}
-	return bObservable{out}.Publish()
+	return bObservable{out}
 }
