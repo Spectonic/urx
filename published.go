@@ -1,8 +1,8 @@
 package urx
 
 import (
-	"sync"
 	"math/rand"
+	"sync"
 )
 
 type publishedObservable struct {
@@ -66,7 +66,7 @@ func (obs *publishedObservable) Lift(op Operator) privObservable {
 
 func (obs *publishedObservable) pump() {
 	for e := range obs.sub.Events() {
-		if  e.Type == OnStart {
+		if e.Type == OnStart {
 			continue
 		}
 		obs.pumpNotification(e)
@@ -105,7 +105,7 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 		i := rand.Intn(len(targets))
 		target := targets[i]
 		//remove it from the targets collection
-		targets = append(targets[:i], targets[i + 1:]...)
+		targets = append(targets[:i], targets[i+1:]...)
 		//select from (send, unsub, none-ready)
 		var unsubbed bool
 		select {

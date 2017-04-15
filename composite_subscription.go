@@ -8,7 +8,7 @@ type CompositeSubscriptionTarget interface {
 }
 
 type CompositeSubscription struct {
-	mutex sync.RWMutex
+	mutex  sync.RWMutex
 	closed bool
 	hooks
 }

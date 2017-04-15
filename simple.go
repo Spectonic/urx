@@ -28,7 +28,7 @@ func (obs simpleObservable) Lift(op Operator) (newObs privObservable) {
 
 type simpleSubscriber struct {
 	//notifications from source are written here
-	out chan Notification
+	out   chan Notification
 	unsub chan interface{}
 	//used to write up to a parent when an unsubscription
 	hooks

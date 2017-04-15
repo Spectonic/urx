@@ -1,10 +1,10 @@
 package urx
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
-	"sync"
-	"fmt"
 )
 
 func TestObservableBasic(t *testing.T) {
@@ -33,11 +33,11 @@ func createChanObs(to int, rate time.Duration) Observable {
 }
 
 func TestObservableFromChan(t *testing.T) {
-	verifyObs(t, createChanObs(5, time.Millisecond * 25))
+	verifyObs(t, createChanObs(5, time.Millisecond*25))
 }
 
 func TestObservablePublish(t *testing.T) {
-	o := createChanObs(5, time.Millisecond * 25).Publish()
+	o := createChanObs(5, time.Millisecond*25).Publish()
 	var wg sync.WaitGroup
 	verify := func() {
 		defer wg.Done()
@@ -54,7 +54,7 @@ func TestObservablePublish(t *testing.T) {
 }
 
 func TestUnsubscribe(t *testing.T) {
-	obs := createChanObs(5, time.Millisecond * 25).Publish()
+	obs := createChanObs(5, time.Millisecond*25).Publish()
 	root := func() {
 		sub := obs.Subscribe()
 		for i := 0; i < 2; i++ {
@@ -155,7 +155,8 @@ func BenchmarkObservableSimple(b *testing.B) {
 		sub.Notify(Complete())
 	})
 	s := o.Subscribe()
-	for range s.Events() {}
+	for range s.Events() {
+	}
 }
 
 func benchPubObs(goRoutineCount int, b *testing.B) {

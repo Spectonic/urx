@@ -1,10 +1,11 @@
 package urx
 
 type NotificationType string
+
 const (
-	OnStart NotificationType = "start"
-	OnNext NotificationType = "next"
-	OnError NotificationType = "error"
+	OnStart    NotificationType = "start"
+	OnNext     NotificationType = "next"
+	OnError    NotificationType = "error"
 	OnComplete NotificationType = "complete"
 )
 

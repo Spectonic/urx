@@ -1,10 +1,10 @@
 package urx
 
 import (
-	"testing"
-	"sync"
-	"time"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
 )
 
 func TestSubject(t *testing.T) {
@@ -27,8 +27,8 @@ func TestSubject(t *testing.T) {
 				x = n.(int)
 				got++
 			}
-			if x != numsSent - 1 {
-				panic(fmt.Sprintf("failed to get %d more items via %p", numsSent - x - 1, c))
+			if x != numsSent-1 {
+				panic(fmt.Sprintf("failed to get %d more items via %p", numsSent-x-1, c))
 			}
 			if got != numsSent {
 				panic("did not get enough numbers")

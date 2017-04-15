@@ -13,7 +13,7 @@ func (o FunctionOperator) Notify(s Subscriber, n Notification) {
 type Observable interface {
 	Publish() PublishedObservable
 	Lift(Operator) Observable
-	Map(m func (interface{}) interface{}) Observable
+	Map(m func(interface{}) interface{}) Observable
 	Filter(func(interface{}) bool) Observable
 	Buffered(buffer int) Observable
 	Subscribe() Subscription
@@ -61,7 +61,7 @@ func (o bObservable) Lift(operator Operator) Observable {
 	return bObservable{o.privObservable.Lift(operator)}
 }
 
-func (o bObservable) Map(m func (interface{}) interface{}) Observable {
+func (o bObservable) Map(m func(interface{}) interface{}) Observable {
 	return o.Lift(FunctionOperator(func(sub Subscriber, n Notification) {
 		if n.Type == OnNext {
 			n.Body = m(n.Body)
@@ -85,7 +85,7 @@ func (o bObservable) Filter(f func(interface{}) bool) Observable {
 
 func (o bObservable) Buffered(buffer int) Observable {
 	type buffered struct {
-		to Subscriber
+		to   Subscriber
 		body Notification
 	}
 

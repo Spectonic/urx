@@ -2,13 +2,13 @@ package urx
 
 type simpleSubject struct {
 	source chan Notification
-	obs PublishedObservable
+	obs    PublishedObservable
 }
 
 func NewPublishSubject() Subject {
 	var out simpleSubject
 	out.source = make(chan Notification)
-	out.obs = Create(func (subscriber Subscriber) {
+	out.obs = Create(func(subscriber Subscriber) {
 		for n := range out.source {
 			subscriber.Notify(n)
 			if n.Type == OnComplete {

@@ -3,21 +3,21 @@ package urx
 import "sync"
 
 type Subscription interface {
-	Events() <- chan Notification
+	Events() <-chan Notification
 	Unsubscribe()
-	Values() <- chan interface{}
-	Error() <- chan error
-	Complete() <- chan interface{}
+	Values() <-chan interface{}
+	Error() <-chan error
+	Complete() <-chan interface{}
 	RootSubscriber
 }
 
 type wrappedSubscription struct {
-	sub privSubscription
-	source chan Notification
+	sub              privSubscription
+	source           chan Notification
 	values, complete chan interface{}
-	error chan error
-	pumping bool
-	mutex sync.RWMutex
+	error            chan error
+	pumping          bool
+	mutex            sync.RWMutex
 }
 
 func (s wrappedSubscription) init() *wrappedSubscription {
@@ -54,7 +54,7 @@ pump_loop:
 	}
 }
 
-func (s *wrappedSubscription) Events() <- chan Notification {
+func (s *wrappedSubscription) Events() <-chan Notification {
 	if s.source == nil {
 		s.source = make(chan Notification)
 	}
@@ -99,7 +99,7 @@ func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
 	}
 }
 
-func (s *wrappedSubscription) Values() <- chan interface{} {
+func (s *wrappedSubscription) Values() <-chan interface{} {
 	if s.values == nil {
 		s.values = make(chan interface{})
 	}
@@ -107,7 +107,7 @@ func (s *wrappedSubscription) Values() <- chan interface{} {
 	return s.values
 }
 
-func (s *wrappedSubscription) Error() <- chan error {
+func (s *wrappedSubscription) Error() <-chan error {
 	if s.error == nil {
 		s.error = make(chan error)
 	}
@@ -115,7 +115,7 @@ func (s *wrappedSubscription) Error() <- chan error {
 	return s.error
 }
 
-func (s *wrappedSubscription) Complete() <- chan interface{} {
+func (s *wrappedSubscription) Complete() <-chan interface{} {
 	if s.complete == nil {
 		s.complete = make(chan interface{})
 	}

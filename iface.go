@@ -22,7 +22,7 @@ type privObservable interface {
 }
 
 type privSubscription interface {
-	Events() <- chan Notification
+	Events() <-chan Notification
 	Unsubscribe()
 	RootSubscriber
 }

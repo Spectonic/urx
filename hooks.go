@@ -30,4 +30,3 @@ func (h *hooks) callHooks() {
 	h.slice = nil
 	h.finished = true
 }
-

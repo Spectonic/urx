@@ -1,14 +1,14 @@
 package urx
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
-	"sync"
-	"fmt"
 )
 
 func TestSubscription(t *testing.T) {
-	obs := createChanObs(10, time.Millisecond * 25).Publish()
+	obs := createChanObs(10, time.Millisecond*25).Publish()
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
