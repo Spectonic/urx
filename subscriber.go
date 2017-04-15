@@ -1,6 +1,9 @@
 package urx
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type Subscription interface {
 	Events() <-chan Notification
@@ -79,6 +82,7 @@ func (s *wrappedSubscription) initIfNeeded(allEvents bool) {
 				select {
 				case s.source <- Complete():
 				case s.complete <- nil:
+				case <-time.After(time.Millisecond * 100):
 				}
 			}
 			if s.error != nil {
