@@ -58,7 +58,8 @@ func (sub *simpleSubscriber) IsSubscribed() bool {
 
 func (sub *simpleSubscriber) Unsubscribe() {
 	sub.RLock()
-	if !sub.IsSubscribed() {
+	if sub.unsubscribed {
+		sub.RUnlock()
 		return
 	}
 	close(sub.unsub)
@@ -97,10 +98,7 @@ func (sub *simpleSubscriber) RUnlock() {
 
 func (sub *simpleSubscriber) Notify(n Notification) {
 	sub.RLock()
-	if sub.unsubscribed {
-		return
-	}
-	if !sub.rawSend(n) {
+	if sub.unsubscribed || !sub.rawSend(n) {
 		sub.RUnlock()
 		return
 	}
