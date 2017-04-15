@@ -69,9 +69,7 @@ func (sub *simpleSubscriber) Unsubscribe() {
 	default:
 	}
 	sub.RUnlock()
-	sub.Lock()
 	sub.handleComplete()
-	sub.Unlock()
 }
 
 func (sub *simpleSubscriber) Lock() {
@@ -112,7 +110,6 @@ func (sub *simpleSubscriber) Notify(n Notification) {
 	sub.RUnlock()
 	if n.Type == OnComplete {
 		sub.handleComplete()
-		sub.Unlock()
 	}
 }
 
@@ -126,6 +123,8 @@ func (sub *simpleSubscriber) rawSend(n Notification) bool {
 }
 
 func (sub *simpleSubscriber) handleComplete() {
+	sub.Lock()
+	defer sub.Unlock()
 	if sub.unsubscribed {
 		return
 	}
