@@ -35,10 +35,10 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 }
 
 func (obs *publishedObservable) Unsubscribe() {
-	if !obs.IsSubscribed() {
-		return
+	if obs.sub != nil {
+		obs.sub.Unsubscribe()
 	}
-	obs.sub.Unsubscribe()
+	obs.sub = nil
 }
 
 func (obs *publishedObservable) IsSubscribed() bool {
@@ -75,8 +75,7 @@ func (obs *publishedObservable) pump() {
 			break
 		}
 	}
-	obs.sub.Unsubscribe()
-	obs.sub = nil
+	obs.Unsubscribe()
 }
 
 func (obs *publishedObservable) pumpNotification(n Notification) {
