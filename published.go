@@ -3,7 +3,6 @@ package urx
 import (
 	"math/rand"
 	"sync"
-	"fmt"
 )
 
 type publishedObservable struct {
@@ -129,10 +128,6 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 
 func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
 	return func() {
-		fmt.Printf("remove target hook from: %p", obs)
 		delete(obs.targets, target)
-		if len(obs.targets) == 0 {
-			obs.Unsubscribe()
-		}
 	}
 }
