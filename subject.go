@@ -7,16 +7,16 @@ type simpleSubject struct {
 
 func NewPublishSubject() Subject {
 	var out simpleSubject
+	out.source = make(chan Notification)
 	out.obs = Create(func(subscriber Subscriber) {
-		out.source = make(chan Notification)
 		for n := range out.source {
 			subscriber.Notify(n)
 			if n.Type == OnComplete {
 				close(out.source)
-				out.source = nil
 			}
 		}
 	}).Publish()
+	out.obs.getObs().(*publishedObservable).initSubIfNeeded()
 	return out
 }
 
@@ -33,9 +33,7 @@ func (s simpleSubject) Complete() {
 }
 
 func (s simpleSubject) Post(n Notification) {
-	if s.source != nil {
-		s.source <- n
-	}
+	s.source <- n
 }
 
 func (s simpleSubject) Subscribe() Subscription {

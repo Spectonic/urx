@@ -111,7 +111,6 @@ func (sub *simpleSubscriber) Notify(n Notification) {
 	}
 	sub.RUnlock()
 	if n.Type == OnComplete {
-		sub.Lock()
 		sub.handleComplete()
 		sub.Unlock()
 	}

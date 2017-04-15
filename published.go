@@ -36,7 +36,6 @@ func (obs *publishedObservable) privSubscribe() privSubscription {
 }
 
 func (obs *publishedObservable) Unsubscribe() {
-	fmt.Printf("unsub obs: %p\n", obs)
 	if obs.sub != nil {
 		obs.sub.Unsubscribe()
 	}
@@ -132,7 +131,7 @@ func (obs *publishedObservable) pumpNotification(n Notification) {
 
 func (obs *publishedObservable) removeTargetHook(target *simpleSubscriber) func() {
 	return func() {
-		fmt.Printf("remove target hook from: %p\n", obs)
+		fmt.Printf("remove target hook from: %p", obs)
 		delete(obs.targets, target)
 		if len(obs.targets) == 0 {
 			obs.Unsubscribe()
